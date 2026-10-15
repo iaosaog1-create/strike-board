@@ -1,7 +1,7 @@
 /* 휴무 업로드: 휴무계획 · ERP 근태 엑셀 → 사업부별 휴무·연차 자동 집계 (총괄팀장: 자기 사업부 / 관리자: 전체) */
 (() => {
   'use strict';
-  const { sb, state, el, seg, busy, toast, register, bizDivs, divName, shortDiv } = window.APP;
+  const { sb, state, el, seg, busy, toast, register, bizDivs, divName, divTone, shortDiv } = window.APP;
   const { today, hhmm, shiftList, ensureShifts } = window.APP.ops;
   const X = window.XLSX_LITE;
   const MASTERS = ['admin', 'master'];
@@ -111,7 +111,7 @@
     if (!S.year) S.year = Number(today().slice(0, 4));
     const redraw = () => leaveView(body);
     const divSeg = master ? el('div', { class: 'f top0' }, el('span', { class: 'hint' }, '사업부'),
-      seg(bizDivs().map((d) => [String(d.id), shortDiv(d.name)]), String(S.div), (v) => { S.div = Number(v); S.plan = S.erp = null; redraw(); })) : null;
+      seg(bizDivs().map((d) => [String(d.id), shortDiv(d.name)]), String(S.div), (v) => { S.div = Number(v); S.plan = S.erp = null; redraw(); }, (v) => divTone(v))) : null;
     const tabs = seg(TABS, S.tab, (v) => { S.tab = v; redraw(); });
     body.replaceChildren(tabs, el('div', { class: 'card pick' }, divSeg || el('p', { class: 'hint top0' }, `${divName(S.div)} 업로드`)), el('p', { class: 'empty' }, '불러오는 중…'));
     let pane;

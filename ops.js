@@ -1,7 +1,7 @@
 /* 현장 운영 화면: 인력 입력 · 출근 현황 · 구역 현황 · 협정/지원 배치 */
 (() => {
   'use strict';
-  const { sb, state, el, seg, busy, toast, register, numIn, toInt, bizDivs, divName, shortDiv } = window.APP;
+  const { sb, state, el, seg, busy, toast, register, numIn, toInt, bizDivs, divName, divTone, shortDiv } = window.APP;
   const MASTERS = ['admin', 'master'];
   const isMaster = (me) => MASTERS.includes(me.role);
 
@@ -76,7 +76,7 @@
     if (isMaster(me)) {
       const opts = [...(allDiv ? [['all', '전체']] : []), ...bizDivs().map((d) => [String(d.id), shortDiv(d.name)])];
       parts.push(el('div', { class: 'f' }, el('span', { class: 'hint' }, '사업부'),
-        seg(opts, allDiv && o.division === 'all' ? 'all' : String(o.division), (v) => { o.division = v === 'all' ? 'all' : Number(v); redraw(); })));
+        seg(opts, allDiv && o.division === 'all' ? 'all' : String(o.division), (v) => { o.division = v === 'all' ? 'all' : Number(v); redraw(); }, (v) => (v === 'all' ? '' : divTone(v)))));
     }
     if (shiftPick && !(me.role === 'leader' && me.team)) {
       parts.push(el('div', { class: 'f' }, el('span', { class: 'hint' }, '근무조'),
@@ -256,7 +256,7 @@
         const s = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis);
         tot = { biz: tot.biz + s.biz, sup: tot.sup + s.sup, coop: tot.coop + s.coop, total: tot.total + s.total, q: tot.q + qq };
         const p = pct(s.total, qq);
-        return el('tr', {}, el('th', {}, shortDiv(d.name)), el('td', {}, s.biz), el('td', {}, s.sup), el('td', {}, s.coop), el('td', { class: 'b' }, s.total), el('td', {}, qq || '-'), el('td', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%'));
+        return el('tr', {}, el('th', { class: divTone(d.id) }, shortDiv(d.name)), el('td', {}, s.biz), el('td', {}, s.sup), el('td', {}, s.coop), el('td', { class: 'b' }, s.total), el('td', {}, qq || '-'), el('td', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%'));
       });
       if (divs.length > 1) { const p = pct(tot.total, tot.q); trs.push(el('tr', { class: 'sum' }, el('th', {}, '소계'), el('td', {}, tot.biz), el('td', {}, tot.sup), el('td', {}, tot.coop), el('td', { class: 'b' }, tot.total), el('td', {}, tot.q || '-'), el('td', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%'))); }
       const summary = el('div', { class: 'card' },
@@ -270,7 +270,7 @@
       const zsecs = divs.map((d) => {
         const zs = zones.filter((z) => z.division_id === d.id && (z.active || rows.some((r) => r.zone_id === z.id)));
         if (!zs.length) return el('div', { class: 'card' }, el('h2', {}, shortDiv(d.name)), el('p', { class: 'empty' }, '등록된 구역이 없습니다'));
-        return el('div', {}, divs.length > 1 ? el('h2', { class: 'divh' }, d.name) : null,
+        return el('div', {}, divs.length > 1 ? el('h2', { class: 'divh ' + divTone(d.id) }, d.name) : null,
           groupZones(zs).map((s) => s.floors.map((f) => el('div', { class: 'card' }, floorHead(s.side, f.floor),
             el('div', { class: 'zgrid' }, f.zones.map((z) => {
               const s2 = sumBy(rows, (x) => x.zone_id === z.id && inB(x)); const p = pct(s2.total, z.required);

@@ -1,7 +1,7 @@
 /* 시각별 저장 · 보고서 (관리자·최고관리자): 08:30 / 11:00 / 12:30 / 22:00 저장 → 화면·엑셀·PDF(A4 인쇄) */
 (() => {
   'use strict';
-  const { sb, state, el, seg, busy, toast, register, bizDivs, divName, shortDiv, printNode } = window.APP;
+  const { sb, state, el, seg, busy, toast, register, bizDivs, divName, divTone, shortDiv, printNode } = window.APP;
   const O = window.APP.ops;
   const X = window.XLSX_LITE;
   const PRESET = ['08:30', '11:00', '12:30', '22:00'];
@@ -19,7 +19,7 @@
     const divs = bizDivs();
     const sumRows = divs.map((dv) => {
       const s = O.sumBy(rows, (x) => x.division_id === dv.id && inB(x)); const qq = O.quotaSum(quota, dv.id, basis);
-      return { name: shortDiv(dv.name), biz: s.biz, sup: s.sup, coop: s.coop, total: s.total, quota: qq, pct: O.pct(s.total, qq) };
+      return { name: shortDiv(dv.name), tone: divTone(dv.id), biz: s.biz, sup: s.sup, coop: s.coop, total: s.total, quota: qq, pct: O.pct(s.total, qq) };
     });
     const tot = sumRows.reduce((a, r) => ({ biz: a.biz + r.biz, sup: a.sup + r.sup, coop: a.coop + r.coop, total: a.total + r.total, quota: a.quota + r.quota }), { biz: 0, sup: 0, coop: 0, total: 0, quota: 0 });
     tot.pct = O.pct(tot.total, tot.quota); tot.name = '소계';
@@ -51,7 +51,7 @@
     const th = (...h) => el('thead', {}, el('tr', {}, ...h.map((x) => el('th', {}, x))));
     const sumTbl = el('table', { class: 'rtbl' }, th('구분', '환경미화원', '행정인력', '협정사', '합계', '일일근무정원', '상근 대비'),
       el('tbody', {}, [...m.sumRows, m.tot].map((r, i, a) => el('tr', { class: i === a.length - 1 ? 'sum' : '' },
-        el('th', {}, r.name), el('td', {}, r.biz), el('td', {}, r.sup), el('td', {}, r.coop), el('td', { class: 'b' }, r.total), el('td', {}, r.quota || '-'), el('td', { class: 'b' }, pctTxt(r.pct))))));
+        el('th', { class: r.tone || '' }, r.name), el('td', {}, r.biz), el('td', {}, r.sup), el('td', {}, r.coop), el('td', { class: 'b' }, r.total), el('td', {}, r.quota || '-'), el('td', { class: 'b' }, pctTxt(r.pct))))));
     let prev = '';
     const zTbl = el('table', { class: 'rtbl zr' }, th('사업부', '구분·층', '구역', '필요', '환경미화원', '행정', '협정', '합계', '달성'),
       el('tbody', {}, m.zoneRows.length ? m.zoneRows.map((r) => {

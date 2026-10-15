@@ -50,11 +50,11 @@
     document.body.append(t);
     setTimeout(() => t.remove(), 3200);
   }
-  function seg(options, value, onChange) {
+  function seg(options, value, onChange, tone) {
     const wrap = el('div', { class: 'seg', role: 'group' });
     const draw = () => wrap.replaceChildren(...options.map(([val, label]) =>
       el('button', {
-        type: 'button', class: val === value ? 'on' : '', 'aria-pressed': String(val === value),
+        type: 'button', class: [val === value ? 'on' : '', tone ? tone(val) : ''].filter(Boolean).join(' '), 'aria-pressed': String(val === value),
         onclick: () => { value = val; draw(); onChange(val); }
       }, label)));
     draw();
@@ -70,6 +70,8 @@
     };
   }
   const emailOf = (empNo) => `${empNo.toLowerCase()}@${CFG.EMAIL_DOMAIN}`;
+  /* 사업부 색: T1 녹색 · T2 파랑 · 부대 주황 (파스텔) */
+  const divTone = (id) => { const n = (state.divisions.find((d) => String(d.id) === String(id)) || {}).name || ''; return n.startsWith('T1') ? 'dv-t1' : n.startsWith('T2') ? 'dv-t2' : n.includes('부대') ? 'dv-bd' : ''; };
   const divName = (id) => (state.divisions.find((d) => d.id === id) || {}).name || '';
   const shortDiv = (name) => (name || '').replace('환경미화사업부', '').replace('건물', '') || name || '';
   function errBox() { return el('div', { class: 'err', role: 'alert', hidden: true }); }
@@ -560,7 +562,7 @@
   }
 
   window.APP = {
-    sb, CFG, state, el, seg, busy, toast, mount, register, numIn, toInt, bizDivs, divName, shortDiv, ROLE_LABEL, printNode,
+    sb, CFG, state, el, seg, busy, toast, mount, register, numIn, toInt, bizDivs, divName, divTone, shortDiv, ROLE_LABEL, printNode,
     reload: () => mainView(),
     start: async function start() {
       try {
