@@ -20,7 +20,7 @@
   const NONE = 'none';
 
   const root = document.getElementById('app');
-  const state = { me: null, menu: 'home', tab: 'pending', members: [], counts: {}, selected: null, divisions: [] };
+  const state = { me: null, menu: 'home', tab: 'pending', members: [], counts: {}, selected: null, divisions: [], setup: { tab: 'quota', div: null, shifts: [], quota: [], zones: [], tasks: [] } };
 
   /* ---------- 작은 도구 ---------- */
   // 화면에 그릴 때는 항상 textContent 로만 넣어서 입력값이 코드로 해석되지 않게 함
@@ -236,6 +236,7 @@
   function mainView() {
     const me = state.me;
     const menus = [['home', '홈']];
+    if (me.role === 'master' || me.role === 'admin') menus.push(['setup', '구역·정원 설정']);
     if (me.role === 'master') menus.push(['approve', '가입 승인']);
     if (!menus.some(([k]) => k === state.menu)) state.menu = 'home';
     const nav = el('nav', { class: 'menu', 'aria-label': '메뉴' }, ...menus.map(([k, label]) =>
@@ -245,7 +246,7 @@
     const body = el('div', {});
     mount(topbar(el('div', { class: 'top-right', style: null }, who)), el('main', { class: 'shell' }, nav, body));
     root.querySelector('.top').append(el('button', { class: 'btn-out', type: 'button', onclick: logoutThenLogin }, '로그아웃'));
-    if (state.menu === 'approve') approveView(body); else homeView(body);
+    if (state.menu === 'approve') approveView(body); else if (state.menu === 'setup') setupView(body); else homeView(body);
   }
   function homeView(body) {
     const me = state.me;
@@ -332,6 +333,172 @@
         inBiz ? null : el('p', { class: 'hint' }, '사업부 소속이 아니어서 관리자 권한만 줄 수 있습니다'), teamBox, desc,
         el('div', { class: 'actions' }, ok, no)));
     return wrap;
+  }
+
+  /* ---------- 구역·정원 설정 (최고관리자·관리자) ---------- */
+  const SIDES = [['L/S', 'L/S'], ['A/S', 'A/S'], ['기타', '기타']];
+  const AREAS = [['전체', '전체'], ['동편', '동편'], ['서편', '서편']];
+  const SET_TABS = [['quota', '정원'], ['zones', '구역'], ['tasks', '업무 종류']];
+  const numIn = (v, label) => el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', 'aria-label': label, value: v == null ? '' : String(v) });
+  const toInt = (t) => { const x = String(t).trim(); if (x === '') return null; return /^\d{1,5}$/.test(x) ? Number(x) : NaN; };
+  const bizDivs = () => state.divisions.filter((d) => d.kind === '사업부');
+
+  async function setupView(body) {
+    body.replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
+    const [sh, qu, zo, tk] = await Promise.all([
+      sb.from('shift_defs').select('code,sort').order('sort'),
+      sb.from('staffing_quota').select('division_id,shift,daily_quota,full_quota'),
+      sb.from('zones').select('id,division_id,side,floor,area,label,task,required,sort,active').order('sort'),
+      sb.from('task_types').select('name,sort,active').order('sort')
+    ]);
+    if (sh.error || qu.error || zo.error || tk.error) {
+      body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요'));
+      return;
+    }
+    Object.assign(state.setup, { shifts: sh.data || [], quota: qu.data || [], zones: zo.data || [], tasks: tk.data || [] });
+    if (!state.setup.div) state.setup.div = (bizDivs()[0] || {}).id || null;
+    drawSetup(body);
+  }
+  function drawSetup(body) {
+    const S = state.setup;
+    const tabs = seg(SET_TABS, S.tab, (v) => { S.tab = v; drawSetup(body); });
+    const pane = S.tab === 'quota' ? quotaPane(body) : S.tab === 'zones' ? zonesPane(body) : tasksPane(body);
+    body.replaceChildren(tabs, pane);
+  }
+
+  function quotaPane(body) {
+    const S = state.setup, inputs = {};
+    const cards = bizDivs().map((d) => {
+      const sumA = el('b', {}), sumB = el('b', {});
+      const rows = S.shifts.map((s) => {
+        const q = S.quota.find((x) => x.division_id === d.id && x.shift === s.code);
+        const a = numIn(q ? q.daily_quota : '', `${d.name} ${s.code} 일일근무정원`);
+        const b = numIn(q ? q.full_quota : '', `${d.name} ${s.code} 상근 정원`);
+        inputs[`${d.id}|${s.code}`] = [a, b, !!q];
+        return { s, a, b };
+      });
+      const calc = () => {
+        sumA.textContent = String(rows.reduce((t, r) => t + (toInt(r.a.value) || 0), 0));
+        sumB.textContent = String(rows.reduce((t, r) => t + (toInt(r.b.value) || 0), 0));
+      };
+      rows.forEach((r) => { r.a.addEventListener('input', calc); r.b.addEventListener('input', calc); });
+      calc();
+      return el('div', { class: 'card qcard' },
+        el('h2', {}, d.name),
+        el('div', { class: 'qrow hd' }, el('span', {}, '근무조'), el('span', {}, '일일근무정원'), el('span', {}, '상근 정원')),
+        rows.map((r) => el('div', { class: 'qrow' }, el('b', {}, r.s.code), r.a, r.b)),
+        el('div', { class: 'qrow sum' }, el('b', {}, '합계'), sumA, sumB));
+    });
+    const go = el('button', { class: 'btn', type: 'button' }, '정원 저장');
+    go.addEventListener('click', busy(go, async () => {
+      const rows = [];
+      for (const [k, [a, b, had]] of Object.entries(inputs)) {
+        const x = toInt(a.value), y = toInt(b.value);
+        if (Number.isNaN(x) || Number.isNaN(y)) return toast('정원은 숫자만 입력하세요', 'err');
+        if (x == null && y == null && !had) continue;
+        const [div, shift] = k.split('|');
+        rows.push({ division_id: Number(div), shift, daily_quota: x || 0, full_quota: y || 0, updated_by: state.me.id, updated_at: new Date().toISOString() });
+      }
+      if (!rows.length) return toast('입력된 정원이 없습니다', 'err');
+      const { error } = await sb.from('staffing_quota').upsert(rows, { onConflict: 'division_id,shift' });
+      if (error) return toast('저장하지 못했습니다. 권한을 확인하세요', 'err');
+      toast('정원을 저장했습니다');
+      await setupView(body);
+    }));
+    return el('div', {},
+      el('p', { class: 'hint pad' }, '해당 없는 근무조는 비워 두세요. 일일근무정원 = 매일 근무해야 하는 인원, 상근 정원 = 전체 정원입니다.'),
+      cards, go);
+  }
+
+  function zonesPane(body) {
+    const S = state.setup;
+    const divSel = el('select', { 'aria-label': '사업부' }, ...bizDivs().map((d) => el('option', { value: d.id }, d.name)));
+    divSel.value = String(S.div);
+    divSel.addEventListener('change', () => { S.div = Number(divSel.value); drawSetup(body); });
+
+    const f = { side: 'L/S', area: '전체' };
+    const taskSel = el('select', { 'aria-label': '업무' }, ...S.tasks.filter((t) => t.active).map((t) => el('option', { value: t.name }, t.name)));
+    const floorIn = el('input', { type: 'text', maxlength: '10', autocomplete: 'off', placeholder: '예: 3F, B1, 1~2F', 'aria-label': '층' });
+    const labelIn = el('input', { type: 'text', maxlength: '30', autocomplete: 'off', placeholder: '예: 탑승동 (없으면 비움)', 'aria-label': '구역 이름' });
+    const reqIn = numIn('', '필요 인원');
+    const add = el('button', { class: 'btn', type: 'button' }, '구역 추가');
+    add.addEventListener('click', busy(add, async () => {
+      const floor = floorIn.value.trim(), req = toInt(reqIn.value);
+      if (!floor) return toast('층을 입력하세요', 'err');
+      if (!taskSel.value) return toast('업무 종류를 먼저 등록하세요', 'err');
+      if (Number.isNaN(req)) return toast('필요 인원은 숫자만 입력하세요', 'err');
+      const { error } = await sb.from('zones').insert({
+        division_id: S.div, side: f.side, floor, area: f.area, task: taskSel.value,
+        label: labelIn.value.trim() || null, required: req || 0, sort: 0
+      });
+      if (error) return toast(error.code === '23505' ? '같은 구역이 이미 있습니다' : '추가하지 못했습니다. 권한을 확인하세요', 'err');
+      toast('구역을 추가했습니다');
+      await setupView(body);
+    }));
+    const form = el('div', { class: 'card' },
+      el('h2', {}, '구역 추가'),
+      el('div', { class: 'f' }, el('span', { class: 'hint' }, '구분'), seg(SIDES, f.side, (v) => { f.side = v; })),
+      el('label', { class: 'f' }, el('span', {}, '층'), floorIn),
+      el('div', { class: 'f' }, el('span', { class: 'hint' }, '동편 / 서편'), seg(AREAS, f.area, (v) => { f.area = v; })),
+      el('label', { class: 'f' }, el('span', {}, '업무'), taskSel),
+      el('label', { class: 'f' }, el('span', {}, '구역 이름 (선택)'), labelIn),
+      el('label', { class: 'f' }, el('span', {}, '필요 인원'), reqIn),
+      add);
+
+    const zs = S.zones.filter((z) => z.division_id === S.div)
+      .sort((a, b) => SIDES.findIndex(([k]) => k === a.side) - SIDES.findIndex(([k]) => k === b.side)
+        || a.floor.localeCompare(b.floor, 'ko', { numeric: true }) || a.area.localeCompare(b.area, 'ko') || a.task.localeCompare(b.task, 'ko'));
+    const total = zs.filter((z) => z.active).reduce((t, z) => t + z.required, 0);
+    const rows = zs.map((z) => {
+      const rq = numIn(z.required, '필요 인원');
+      const save = el('button', { class: 'btn ghost sm', type: 'button' }, '저장');
+      const tog = el('button', { class: 'btn ghost sm', type: 'button' }, z.active ? '사용 중지' : '다시 사용');
+      save.addEventListener('click', busy(save, async () => {
+        const v = toInt(rq.value);
+        if (v == null || Number.isNaN(v)) return toast('필요 인원은 숫자만 입력하세요', 'err');
+        const { error } = await sb.from('zones').update({ required: v }).eq('id', z.id);
+        if (error) return toast('저장하지 못했습니다', 'err');
+        toast('저장했습니다'); await setupView(body);
+      }));
+      tog.addEventListener('click', busy(tog, async () => {
+        const { error } = await sb.from('zones').update({ active: !z.active }).eq('id', z.id);
+        if (error) return toast('처리하지 못했습니다', 'err');
+        await setupView(body);
+      }));
+      return el('div', { class: 'zrow' + (z.active ? '' : ' off') },
+        el('div', {}, el('b', {}, `${z.side} · ${z.floor} · ${z.area} · ${z.task}`), z.label ? el('small', {}, z.label) : null, z.active ? null : el('small', {}, '사용 중지됨')),
+        el('div', { class: 'zact' }, rq, el('span', {}, '명'), save, tog));
+    });
+    const list = el('div', { class: 'card' },
+      el('h2', {}, `등록된 구역 ${zs.length}개`, el('small', { class: 'sumtxt' }, `필요 인원 합계 ${total}명`)),
+      rows.length ? rows : el('p', { class: 'empty' }, '아직 등록된 구역이 없습니다. 위에서 추가하세요'));
+    return el('div', {}, el('div', { class: 'f top0' }, el('span', { class: 'hint' }, '사업부'), divSel), form, list);
+  }
+
+  function tasksPane(body) {
+    const S = state.setup;
+    const nameIn = el('input', { type: 'text', maxlength: '20', autocomplete: 'off', placeholder: '예: 특수업무', 'aria-label': '업무 이름' });
+    const add = el('button', { class: 'btn', type: 'button' }, '업무 추가');
+    add.addEventListener('click', busy(add, async () => {
+      const name = nameIn.value.trim();
+      if (!name) return toast('업무 이름을 입력하세요', 'err');
+      const { error } = await sb.from('task_types').insert({ name, sort: S.tasks.reduce((m, t) => Math.max(m, t.sort), 0) + 1 });
+      if (error) return toast(error.code === '23505' ? '이미 있는 업무입니다' : '추가하지 못했습니다. 권한을 확인하세요', 'err');
+      toast('업무를 추가했습니다'); await setupView(body);
+    }));
+    const rows = S.tasks.map((t) => {
+      const tog = el('button', { class: 'btn ghost sm', type: 'button' }, t.active ? '사용 중지' : '다시 사용');
+      tog.addEventListener('click', busy(tog, async () => {
+        const { error } = await sb.from('task_types').update({ active: !t.active }).eq('name', t.name);
+        if (error) return toast('처리하지 못했습니다', 'err');
+        await setupView(body);
+      }));
+      return el('div', { class: 'zrow' + (t.active ? '' : ' off') }, el('div', {}, el('b', {}, t.name), t.active ? null : el('small', {}, '사용 중지됨')), el('div', { class: 'zact' }, tog));
+    });
+    return el('div', {},
+      el('div', { class: 'card' }, el('h2', {}, '업무 추가'), el('label', { class: 'f' }, el('span', {}, '업무 이름'), nameIn), add),
+      el('div', { class: 'card' }, el('h2', {}, '업무 종류'), rows.length ? rows : el('p', { class: 'empty' }, '등록된 업무가 없습니다'),
+        el('p', { class: 'hint' }, '이미 구역에 쓰인 업무는 삭제하지 않고 "사용 중지"로 숨깁니다.')));
   }
 
   /* ---------- 진입 / 로그아웃 ---------- */

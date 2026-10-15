@@ -91,3 +91,26 @@ input:focus,select:focus,button:focus-visible{outline:3px solid var(--blue);outl
   .shell{padding:24px}
 }
 [hidden]{display:none!important}
+/* 구역·정원 설정 */
+.shell>div>.seg{margin-bottom:16px}
+.card h2{font-size:21px;margin:0 0 4px}
+.card h2 .sumtxt{display:block;font-size:16px;font-weight:600;color:var(--sub);margin-top:4px}
+.pad{padding:0 4px 12px}
+.top0{margin-top:0!important}
+.qrow{display:grid;grid-template-columns:minmax(64px,1fr) 108px 108px;gap:10px;align-items:center;margin-top:10px}
+.qrow input{min-height:52px;padding:6px 10px;text-align:right}
+.qrow.hd{font-size:15px;font-weight:700;color:var(--sub);text-align:right}
+.qrow.hd span:first-child{text-align:left}
+.qrow.sum{border-top:2px solid var(--line);padding-top:12px;font-size:20px}
+.qrow.sum b:not(:first-child){text-align:right;padding-right:10px}
+.qrow>b:first-child{font-size:19px}
+.qcard+.qcard{margin-top:16px}
+.zrow{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid var(--line)}
+.zrow>div:first-child{flex:1 1 220px}
+.zrow b{display:block;font-size:19px}
+.zrow small{display:block;color:var(--sub);font-size:16px;margin-top:2px}
+.zrow.off b{color:var(--sub);text-decoration:line-through}
+.zact{display:flex;gap:8px;align-items:center}
+.zact input{width:84px;min-height:48px;padding:6px 10px;text-align:right}
+.zact span{font-size:17px;color:var(--sub)}
+.top0+.card{margin-top:16px}
