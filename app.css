@@ -432,3 +432,289 @@ input:focus,select:focus,button:focus-visible{outline:3px solid #6FA0EC;outline-
 .cp-wait{color:#B4423C;font-weight:700}
 .ck-tiles{margin-top:10px;margin-bottom:10px}.tbl.left thead th{text-align:left}
 .seg button{flex:1 0 auto}
+
+/* ===== TOPS 스타일 통일 (헤더 · 하단 탭 · 카드 · 색) ===== */
+:root{--navy:#1F3A5F;--teal:#2A6F78;--teal-bg:#E3F1F1;--shadow:0 2px 12px rgba(20,40,70,.08)}
+body{background:#F2F4F7}
+.top{background:linear-gradient(135deg,#1F3A5F 0%,#2A6F78 100%);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 14px;min-height:64px}
+.top h1{font-size:21px;font-weight:800;letter-spacing:-.2px}
+.top small{color:rgba(255,255,255,.78);font-size:13px}
+.top .btn-out{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;min-height:40px;padding:0 14px;font-weight:700}
+.top .who{color:rgba(255,255,255,.85)} .top .who b{color:#fff}
+.card{border:0;border-radius:20px;box-shadow:var(--shadow);padding:16px}
+.card h2{font-size:18px;font-weight:800;color:var(--navy)}
+.hint{color:#7a8190;font-size:14px}
+.btn{background:var(--navy)}
+.btn.ghost{background:#fff;color:var(--navy);border:1.5px solid #C9D3E0}
+.btn.danger{background:#C9443A;color:#fff}
+.seg{background:#E4E9F0}
+.seg button.on{color:var(--navy);box-shadow:0 1px 5px rgba(20,40,70,.15)}
+.chip{border-radius:999px;border:1.5px solid #C9D3E0;background:#fff;color:#4a5568;font-weight:700}
+.chip.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.chip.auto{border-style:dashed;color:var(--teal);border-color:var(--teal);background:#fff}
+.name.on{background:var(--navy);border-color:var(--navy)}
+.pp.on{background:var(--teal-bg);border:2px solid var(--teal)} .pp.on small{color:var(--teal)}
+.ck-tile b{color:var(--navy)} .ck-tile{border:0;box-shadow:var(--shadow)}
+.ck-tile.ok b{color:#1F9D74}.ck-tile.mid b{color:#D98A00}
+/* 하단 탭 */
+.shell{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+.menu{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;overflow:visible;background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -4px 18px rgba(20,40,70,.12);padding:6px 6px calc(8px + env(safe-area-inset-bottom));max-width:100%}
+.menu[data-n="2"]{grid-template-columns:repeat(2,1fr)}.menu[data-n="3"]{grid-template-columns:repeat(3,1fr)}.menu[data-n="4"]{grid-template-columns:repeat(4,1fr)}
+.menu button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:58px;padding:4px 2px;border-radius:12px;background:transparent;color:#7a8190;font-size:12px;font-weight:700;line-height:1.15;white-space:normal;word-break:keep-all;text-align:center;box-shadow:none}
+.menu button .ic{display:block;width:26px;height:26px}.menu button .ic svg{width:26px;height:26px}
+.menu button .lb{display:block}
+.menu button.on{background:var(--teal-bg);color:var(--teal);box-shadow:none}
+.menu .cnt{position:absolute;top:2px;right:calc(50% - 22px);margin:0;background:#E5483B;color:#fff;border-radius:999px;min-width:18px;height:18px;padding:0 5px;font-size:11px;line-height:18px}
+.menu.solo{display:none}
+.shell:has(.menu.solo){padding-bottom:30px}
+@media (min-width:900px){.menu{left:50%;right:auto;transform:translateX(-50%);width:min(820px,96%);bottom:12px;border-radius:20px}.menu button{min-height:62px;font-size:13px}}
+/* 현황: 위쪽 조작을 얇게, 숫자를 먼저 */
+.pick{padding:12px 14px}
+.pick .f{margin-top:8px}.pick .hint{display:none}
+.pick .datebar+.f,.pick .f:first-child{margin-top:8px}
+.pick>.btn.sm{display:inline-block;width:auto;min-height:42px;margin:10px 8px 0 0;padding:0 16px;font-size:15px}
+.basisbar{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:6px 12px 10px;margin-top:12px}
+.basisbtn{display:flex;width:100%;justify-content:space-between;align-items:center;gap:8px;background:transparent;border:0;padding:8px 2px;font-size:16px;font-weight:800;color:var(--navy);cursor:pointer;text-align:left}
+.basisbtn b{font-size:14px;color:var(--teal);font-weight:800}
+.basisbar .chips{margin-top:6px}
+.flipboard{border-radius:22px}
+.stile{border-radius:22px}
+
+/* ===== 크기 균형 조정 (너무 크지 않게) ===== */
+body{font-size:16px;line-height:1.45}
+.top{padding:calc(10px + env(safe-area-inset-top)) 14px 11px;min-height:54px;gap:10px}
+.top h1{font-size:17px}.top small{font-size:12px}
+.top .lg{width:38px;height:38px}
+.top .btn-out{min-height:34px;padding:0 12px;font-size:13px}
+.top .who{font-size:12px}.top .who b{font-size:14px}
+.wrap{padding:16px 14px 32px}
+.card{padding:14px;border-radius:18px}
+.card+.card{margin-top:12px}
+.card h2{font-size:16px}
+.hint{font-size:13px}
+label.f,div.f{margin-top:12px}
+label.f>span,div.f>.hint{font-size:14px;margin-bottom:5px}
+input[type=text],input[type=password],input[type=search],select,input[type=date],input[type=time]{min-height:44px;padding:6px 12px;font-size:15px;border-radius:12px}
+.btn{min-height:48px;font-size:16px;border-radius:14px;margin-top:14px}
+.btn.sm{min-height:40px;font-size:14px;padding:0 14px}
+.btn.big{min-height:60px;font-size:22px}
+.datebar .btn.sm{min-height:44px;padding:0 10px;min-width:40px}
+.pick>.btn.sm{min-height:38px;font-size:14px}
+.seg button{min-height:40px;font-size:14px;padding:0 10px}
+.chip{min-height:38px;padding:0 14px;font-size:14px}
+.basisbtn{font-size:14px;padding:6px 2px}.basisbtn b{font-size:13px}
+.tbl{font-size:14px}.tbl th,.tbl td{padding:7px 6px}.tbl thead th{font-size:12px}
+.zrow b{font-size:16px}.zrow small{font-size:13px}
+.sumbar b{font-size:24px}.sumbar span,.sumbar small{font-size:13px}
+.ck-tile{padding:8px 2px}.ck-tile b{font-size:22px}.ck-tile span{font-size:12px}
+.pp{min-height:54px}.pp b{font-size:16px}.pp small{font-size:11px}
+.ppgrid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.stile .tn{font-size:15px}.stile .tb{font-size:26px}.stile .tb small{font-size:12px}
+.stile .tp{font-size:14px}
+.ring{width:72px;height:72px}.ring .c b{font-size:16px}
+.stile.sup .sl{font-size:14px;padding:6px 0}.stile.sup .sl b{font-size:20px}
+.m3 b{font-size:16px}
+.cclock b{font-size:48px}
+.signbox b{font-size:24px}
+.phonebox{min-height:48px}.phonebox .mask{font-size:17px}.phonebox input{font-size:20px;min-height:44px}
+.bigmsg{font-size:22px}
+.title{font-size:24px}
+.menu{padding:4px 4px calc(6px + env(safe-area-inset-bottom));gap:0}
+.menu button{min-height:46px;font-size:10.5px;gap:1px;padding:3px 1px}
+.menu button .ic,.menu button .ic svg{width:21px;height:21px}
+.shell{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+.menu .cnt{min-width:16px;height:16px;line-height:16px;font-size:10px;right:calc(50% - 18px)}
+.rm .rn{font-size:24px}.rm .rt{font-size:13px}
+@media (min-width:900px){.menu button{min-height:50px;font-size:12px}.menu button .ic,.menu button .ic svg{width:22px;height:22px}}
+.flipboard{padding:12px 14px}.flipboard .lb{font-size:13px}
+.flipboard .d{width:36px;height:52px;font-size:36px;border-radius:9px}
+.flipboard .flap{margin:8px 0;gap:5px}.flipboard .unit{font-size:16px}
+.err{font-size:14px;padding:10px 12px}
+
+/* ===== TOPS 크기에 맞춰 다시 조정 (더 촘촘하게, 한 줄에 5개) ===== */
+body{font-size:14px;line-height:1.4}
+.top{min-height:50px;padding:calc(8px + env(safe-area-inset-top)) 12px 9px}
+.top h1{font-size:16px}.top small{font-size:11px}.top .lg{width:34px;height:34px}
+.top .btn-out{min-height:30px;font-size:12px;padding:0 10px}
+.card{padding:12px;border-radius:16px}.card+.card{margin-top:10px}
+.card h2{font-size:15px}
+.hint,label.f>span,div.f>.hint{font-size:12px}
+label.f,div.f{margin-top:10px}
+input[type=text],input[type=password],input[type=search],select,input[type=date],input[type=time]{min-height:40px;padding:4px 10px;font-size:14px;border-radius:10px}
+.btn{min-height:42px;font-size:15px;border-radius:12px;margin-top:12px}
+.btn.sm{min-height:34px;font-size:13px;padding:0 12px}
+.datebar .btn.sm{min-height:40px;min-width:36px;padding:0 8px}
+.pick>.btn.sm{min-height:34px;font-size:13px;margin-top:8px}
+.seg button{min-height:36px;font-size:13px;padding:0 8px}
+.chip{min-height:32px;padding:0 12px;font-size:13px}
+.basisbtn{font-size:13px}.basisbtn b{font-size:12px}
+.tbl{font-size:13px}.tbl th,.tbl td{padding:6px 5px}.tbl thead th{font-size:11px}
+.ppgrid{grid-template-columns:repeat(5,1fr);gap:5px;margin-top:6px}
+.pp{min-height:44px;padding:4px 1px;border-radius:10px;gap:1px}
+.pp b{font-size:13px;font-weight:700}.pp small{font-size:10px;line-height:1.15}
+.pp.gm,.pp.gf{border-left-width:4px}
+.ck-tile{padding:6px 2px;border-radius:12px}.ck-tile b{font-size:19px}.ck-tile span{font-size:11px}
+.sumbar b{font-size:20px}
+.stile{padding:10px 8px}.stile .tn{font-size:14px}.stile .tb{font-size:22px}.stile .tb small{font-size:11px}.stile .tp{font-size:12px}
+.ring{width:62px;height:62px}.ring .c b{font-size:14px}.ring .c span{font-size:9px}
+.stile.sup .sl{font-size:13px;padding:5px 0}.stile.sup .sl b{font-size:17px}
+.m3{font-size:10px}.m3 b{font-size:14px}
+.flipboard{padding:10px 12px}.flipboard .lb{font-size:12px}
+.flipboard .d{width:30px;height:44px;font-size:30px;border-radius:8px}
+.flipboard .unit{font-size:14px}
+.zrow b{font-size:14px}.zrow small{font-size:12px}
+.err{font-size:13px;padding:8px 10px}
+.menu{padding:3px 3px calc(5px + env(safe-area-inset-bottom))}
+.menu button{min-height:40px;font-size:10px}
+.menu button .ic,.menu button .ic svg{width:19px;height:19px}
+.shell{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.rm .rn{font-size:20px}.rm .rt{font-size:12px}
+.cclock b{font-size:40px}.btn.big{min-height:54px;font-size:20px}
+.phonebox{min-height:44px}.phonebox .mask{font-size:15px}.phonebox input{font-size:18px;min-height:40px}
+.title{font-size:20px}.bigmsg{font-size:19px}
+@media (min-width:900px){body{font-size:15px}.ppgrid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}.menu button{min-height:46px;font-size:12px}}
+.ring svg{width:100%;height:100%}
+.datebar input{min-height:40px;height:40px}
+/* ===== 균형 조정: 빈 공간 줄이기 + 한 단계 더 촘촘하게 ===== */
+body{font-size:13px}
+.card{padding:10px 12px}.card+.card{margin-top:8px}
+.card h2{font-size:14px}
+label.f,div.f{margin-top:8px}
+input[type=text],input[type=password],input[type=search],select,input[type=date],input[type=time]{min-height:36px;font-size:13px;padding:3px 9px}
+.btn{min-height:38px;font-size:14px;margin-top:10px}
+.btn.sm{min-height:32px;font-size:12px;padding:0 10px}
+.datebar{gap:5px}
+.datebar input,.datebar input[type=date]{min-height:36px;height:36px;font-size:13px;padding:2px 8px}
+.datebar .btn.sm{min-height:36px;height:36px;min-width:32px;padding:0 8px;font-size:12px;margin-top:0}
+.seg{padding:3px;gap:3px;border-radius:12px}
+.seg button{min-height:30px;font-size:12px;padding:0 6px;border-radius:9px}
+.pick>.btn.sm{min-height:32px;margin-top:6px}
+.chip{min-height:28px;font-size:12px;padding:0 10px}
+.basisbtn{font-size:12px;padding:8px 12px}.basisbtn b{font-size:11px}
+/* 이름 카드 (5열) */
+.ppgrid{gap:4px;margin-top:5px}
+.pp{min-height:38px;padding:3px 1px;border-radius:9px}
+.pp b{font-size:12px}.pp small{font-size:9px}
+.ck-tile{padding:5px 2px}.ck-tile b{font-size:17px}.ck-tile span{font-size:10px}
+/* 노란 합계 카드: 숫자 옆 막대로 빈 공간 채움 */
+.flipboard{padding:8px 12px;border-radius:16px;display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:center}
+.flipboard .lb{grid-column:1/-1;font-size:11px}
+.flipboard .flap{margin:4px 0;gap:4px}
+.flipboard .d{width:24px;height:34px;font-size:24px;border-radius:7px}
+.flipboard .unit{font-size:12px;padding-bottom:2px}
+.flipboard .share{height:8px;align-self:center}
+.flipboard .shl{grid-column:1/-1;font-size:11px;margin-top:2px;gap:10px}
+/* 사업부 카드 */
+.stiles{gap:8px}
+.stile{padding:8px 6px;border-radius:16px}
+.stile .tn{font-size:13px}
+.stile .tb{font-size:18px}.stile .tb small{font-size:10px;margin-left:3px}
+.stile .tp{font-size:11px}
+.ring{width:50px;height:50px;margin:4px auto 2px}.ring .c b{font-size:12px}.ring .c span{font-size:8px}
+.stile .m3{gap:4px;margin-top:6px}.stile .m3 div{padding:4px 1px;font-size:9px;border-radius:8px}.stile .m3 b{font-size:13px}
+.stile.sup .sl{font-size:12px;padding:5px 0}.stile.sup .sl b{font-size:15px}
+/* 층별 배치: 테두리 얇게, 카드 꽉 채우기, 글자 꺾임 방지 */
+.floor{padding:8px;border-radius:14px}
+.floor .fh{font-size:13px;margin-bottom:5px}.floor .fp{font-size:12px}
+.bld{border-width:2px;border-radius:16px;padding:6px;gap:6px;align-items:start}
+.bld.one{grid-template-columns:1fr}
+.wing{gap:5px}
+.wing.full,.bld.one .wing{grid-template-columns:1fr 1fr}
+.wing.full .wl,.bld.one .wing .wl{grid-column:1/-1}
+.wl{font-size:10px;letter-spacing:0;line-height:1}
+.rm{padding:5px 7px;border-width:2px;border-radius:10px}
+.rm .rt{font-size:12px;flex-wrap:wrap;gap:2px 4px}
+.rm .rt b{white-space:nowrap}
+.rm .bd{font-size:10px;padding:0 5px;border-radius:6px;margin-left:auto}
+.rm .rn{font-size:18px;line-height:1.2}.rm .rn small{font-size:10px;margin-left:3px}
+.rm .rs{font-size:9.5px;line-height:1.3;white-space:nowrap}
+.legend{font-size:11px;gap:8px;margin-top:8px}
+/* 하단 메뉴 */
+.menu button{min-height:38px;font-size:9.5px}
+.menu button .ic,.menu button .ic svg{width:18px;height:18px}
+@media (min-width:900px){
+  body{font-size:14px}
+  .menu{width:min(1152px,calc(100% - 48px))}
+  .menu button{min-height:44px;font-size:12px}
+  .ppgrid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))}
+}
+.wing.full,.bld.one .wing{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+@media (min-width:761px){.stiles{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}}
+.wing.full,.bld.one .wing{display:flex;flex-wrap:wrap;gap:5px}
+.wing.full .wl,.bld.one .wing .wl{flex:0 0 100%}
+.wing.full .rm,.bld.one .wing .rm{flex:1 1 120px;min-width:0}
+.floor{border:0;padding:0;background:transparent}
+.floors,.floors .col{gap:10px}
+.floor .fh{padding:0 2px}
+/* 층별 배치: 회색 테두리 제거, 카드 균등 2열 */
+.bld{border:0;background:none;border-radius:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.bld .rm:last-child:nth-child(odd){grid-column:1/-1}
+.rm{padding:5px 8px}
+.rm .rt b .ar{font-style:normal;font-weight:600;font-size:9.5px;color:var(--sub);margin-left:4px}
+.floor .fh{margin-bottom:6px}
+.floors,.floors .col{gap:12px}
+/* 사업부 카드: 링 왼쪽, 숫자 오른쪽으로 가로 배치 / 지원·협정 줄 간격 균등 */
+.stile:not(.sup){display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-content:center;align-items:center;text-align:left;padding:8px 10px}
+.stile:not(.sup) .tn{grid-column:1/-1;text-align:left;margin-bottom:2px}
+.stile:not(.sup) .ring{grid-column:1;grid-row:2/4;width:48px;height:48px;margin:0}
+.stile:not(.sup) .ring .c b{font-size:11px}.ring .c span{display:none}
+.stile:not(.sup) .tb{grid-column:2;grid-row:2;text-align:left;font-size:20px}
+.stile:not(.sup) .tp{grid-column:2;grid-row:3;text-align:left}
+.stile:not(.sup) .m3{grid-column:1/-1}
+.stile.sup{display:flex;flex-direction:column;text-align:left;padding:8px 10px}
+.stile.sup .tn{text-align:left;margin-bottom:2px}
+.stile.sup .sl{flex:1;align-items:center}
+/* ===== 색상 3톤 통일: 남색 · 청록 · 회색 (부족만 빨강) ===== */
+:root{
+  --navy:#1F3A5F;--teal:#2A6F78;--teal-bg:#E3F1F1;--slate:#EAEFF4;--red:#B3261E;--redbg:#FCE9E7;
+  --t1:#E3EDF0;--t2:#E3EDF0;--bd:#E3EDF0;--t1-on:#1F3A5F;--t2-on:#1F3A5F;--bd-on:#1F3A5F;
+  --t1-line:#9DBCC2;--t2-line:#9DBCC2;--bd-line:#9DBCC2;--t1-ink:#1F3A5F;--t2-ink:#1F3A5F;--bd-ink:#1F3A5F;
+  --okc:#2A6F78;--okbg:#E3F1F1;--midc:#B3261E;--midbg:#FCE9E7;--lowc:#B3261E;--lowbg:#FCE9E7;
+  --ok:#2A6F78;--ok-bg:#E3F1F1;--danger:#B3261E;--orange:#2A6F78;--orange-bg:#E3F1F1;--blue:#2A6F78;--blue-bg:#E3F1F1;
+}
+.seg button.dv-t1,.seg button.dv-t2,.seg button.dv-bd{background:#F3F7F9;color:var(--navy);box-shadow:inset 0 0 0 1px #D3E0E5}
+.seg button.dv-t1.on,.seg button.dv-t2.on,.seg button.dv-bd.on{background:var(--navy);color:#fff;box-shadow:none}
+h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
+.rm.ok{border-color:#8DC3C6}.rm.mid,.rm.low{border-color:#E39A94}
+.ring.ok{color:var(--teal)}.ring.mid,.ring.low{color:var(--red)}
+.ck-tile.ok b{color:var(--teal)}.ck-tile.mid b{color:var(--navy)}.ck-tile.low b{color:var(--red)}
+.flipboard{background:linear-gradient(135deg,#EFF4F7,#E1EBF0);border-color:#CBDAE2}
+.flipboard .lb,.flipboard .unit,.flipboard .shl{color:var(--navy)}
+.flipboard .d{background:var(--navy);color:#E3F1F1}
+.flipboard .share i.dv-t1,.flipboard .share i.dv-t2,.flipboard .share i.dv-bd{background:var(--teal)}
+.pp.gm,.pp.gm.on{border-left-color:#3E5A82}.pp.gf,.pp.gf.on{border-left-color:#6FB1B6}
+.ck-chip.gm{box-shadow:inset 4px 0 0 #3E5A82}.ck-chip.gf{box-shadow:inset 4px 0 0 #6FB1B6}
+.pp.half{border-color:#8FA3B8}
+.ck-chip.on{background:var(--teal-bg)}.ck-chip.wait{background:var(--slate)}
+.menu .cnt{background:var(--red)}
+/* 근무 현황 카드: 반원 게이지 + 표 */
+.gcard .gauge{--gc:var(--teal);position:relative;width:190px;height:100px;margin:4px auto 8px;overflow:hidden}
+.gcard .gauge.mid,.gcard .gauge.low{--gc:var(--red)}
+.gcard .gauge .arc{position:absolute;left:0;top:0;width:190px;height:190px;border-radius:50%;background:conic-gradient(from 270deg,var(--gc) 0 var(--a),#E6ECF1 var(--a) 180deg,transparent 180deg)}
+.gcard .gauge .gin{position:absolute;left:22px;top:22px;width:146px;height:146px;border-radius:50%;background:#fff}
+.gcard .gauge .gtx{position:absolute;left:0;right:0;bottom:0;text-align:center;line-height:1.15}
+.gcard .gtx b{display:block;font-size:26px;color:var(--navy)}
+.gcard .gtx small{display:block;font-size:11px;color:var(--sub)}
+.gcard .gtx em{font-style:normal;color:var(--red);font-weight:700}.gcard .gtx .okt{color:var(--teal);font-weight:700}
+.gtbl th,.gtbl td{text-align:right}.gtbl th:first-child,.gtbl td:first-child,.gtbl tbody th{text-align:left}
+.gtbl{font-size:12px}.gtbl thead th{font-size:10px}
+.gsup{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px;margin-top:10px}
+.gsup div{background:var(--slate);border-radius:10px;padding:6px 4px;text-align:center}
+.gsup b{display:block;font-size:15px;color:var(--navy)}.gsup small{font-size:10px;color:var(--sub)}
+@media (min-width:761px){.gcard .gauge{width:240px;height:126px}.gcard .gauge .arc{width:240px;height:240px}.gcard .gauge .gin{left:28px;top:28px;width:184px;height:184px}.gcard .gtx b{font-size:32px}}
+.gtbl{table-layout:fixed;width:100%}
+.gtbl th,.gtbl td{padding:6px 3px}
+.gtbl th:first-child,.gtbl td:first-child{width:21%;padding-left:6px}
+.gcard .gauge .gin{left:18px;top:18px;width:154px;height:154px}
+@media (min-width:761px){.gcard .gauge .gin{left:22px;top:22px;width:196px;height:196px}}
+.gtbl{min-width:0}
+.gtbl th,.gtbl td{white-space:nowrap}
+.pc.mid,.pc.low{color:var(--red)}.bar i.mid,.bar i.low{background:var(--red)}
+@media (min-width:761px){
+  .gcard{display:grid;grid-template-columns:260px 1fr;column-gap:24px;align-items:center}
+  .gcard>h2{grid-column:1/-1}
+  .gcard>.gauge{grid-column:1;grid-row:2/4;margin:0 auto}
+  .gcard>.tblwrap{grid-column:2;grid-row:2;margin-top:0}
+  .gcard>.gsup{grid-column:2;grid-row:3}
+  .gcard>.hint{grid-column:1/-1}
+}

@@ -256,9 +256,22 @@
     if (me.role === 'leader') { menus.length = 0; menus.push(SCREENS.find((s) => s.key === 'check')); state.menu = 'check'; }   // 팀장은 내 팀 화면 하나만
     if (!menus.some((s) => s.key === state.menu)) state.menu = 'home';
     if (state.menu === 'status') state.menu = 'home';
-    const nav = el('nav', { class: 'menu' + (menus.length < 2 ? ' solo' : ''), 'aria-label': '메뉴' }, ...menus.map((s) =>
+    const ICONS = {
+      home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+      check: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 14l2 2 4-4"/>',
+      input: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
+      place: '<path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+      att: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/><circle cx="17" cy="9" r="2.3"/><path d="M16 14c3 0 5 2 5 5"/>',
+      setup: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+      coop: '<circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.6 2.7-6 6-6"/><path d="M14 17l2.5 2.5L21 14"/>',
+      leave: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+      report: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 12h6M10 16h6"/>',
+      approve: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
+    };
+    const icon = (k) => { const sp = el('span', { class: 'ic', 'aria-hidden': 'true' }); sp.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICONS[k] || ICONS.home}</svg>`; return sp; };
+    const nav = el('nav', { class: 'menu' + (menus.length < 2 ? ' solo' : ''), 'aria-label': '메뉴', 'data-n': String(menus.length) }, ...menus.map((s) =>
       el('button', { type: 'button', class: state.menu === s.key ? 'on' : '', onclick: () => { state.menu = s.key; mainView(); } },
-        s.label, s.key === 'approve' && state.counts.pending ? el('span', { class: 'cnt' }, state.counts.pending) : null)));
+        icon(s.key), el('span', { class: 'lb' }, s.label), s.key === 'approve' && state.counts.pending ? el('span', { class: 'cnt' }, state.counts.pending) : null)));
     const who = el('div', { class: 'who' }, el('b', {}, me.name), [ROLE_LABEL[me.role], shortDiv(divName(me.division_id)), me.plan_team || ''].filter(Boolean).join(' · '));
     const body = el('div', {});
     mount(topbar(el('div', { class: 'top-right', style: null }, who)), el('main', { class: 'shell' }, nav, body));

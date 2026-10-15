@@ -54,6 +54,7 @@
       return;
     }
     const zmap = new Map(zones.map((z) => [z.id, z]));
+    const zoneShort = (id) => { const z = zmap.get(id); return z ? String(O.zoneName(z)).split('·').pop().trim() : '구역'; };
     const zoneLabel = (id) => { const z = zmap.get(id); return z ? `${z.floor} ${O.zoneName(z)}` : '구역 미배치'; };
     const divRows = all.filter((r) => r.division_id === S.division);
     const teams = [...new Set(divRows.map((r) => r.team || '미지정'))].sort(sortTeam);
@@ -171,7 +172,7 @@
       };
       const people = teamRows.map((r) => {
         const leave = isLeave(r); const on = S.mark.has(r.emp_no);
-        const sub = leave ? reason(r) : on ? `✔ ${S.mark.get(r.emp_no) ? zoneLabel(S.mark.get(r.emp_no)) : '출근'}` : (r.leave_kind === 'half' ? '반차' : '');
+        const sub = leave ? reason(r) : on ? `✔ ${S.mark.get(r.emp_no) ? zoneShort(S.mark.get(r.emp_no)) : '출근'}` : (r.leave_kind === 'half' ? '반차' : '');
         return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + (leave ? ' leave' : on ? ' on' : '') + (r.leave_kind === 'half' ? ' half' : ''), disabled: leave, 'aria-pressed': String(on), onclick: tap(r) },
           el('b', {}, r.name), el('small', {}, sub));
       });
@@ -193,7 +194,7 @@
         k.closed ? el('div', { class: 'info' }, el('b', {}, '완료된 팀입니다'), '고친 뒤 "다시 완료"를 누르면 결근이 다시 계산됩니다.') : null,
         el('div', { class: 'card' }, el('h2', {}, `${S.team} 출근 체크`),
           el('label', { class: 'f' }, el('span', {}, '① 배치할 구역'), zSel),
-          el('div', { class: 'f' }, el('span', { class: 'hint' }, '② 출근한 사람 이름을 누르세요 (다시 누르면 취소, 다른 구역을 고르고 누르면 구역 변경)'), el('div', { class: 'ppgrid' }, people)),
+          el('div', { class: 'f' }, el('span', { class: 'hint' }, '② 출근한 사람 이름을 누르세요 (다시 누르면 취소)'), el('div', { class: 'ppgrid' }, people)),
           noZone ? el('p', { class: 'hint' }, `구역을 지정하지 않은 사람 ${noZone}명`) : null,
           el('p', { class: 'hint' }, '"출근 체크 완료"를 누르면 체크하지 않은 사람이 결근으로 확정됩니다.')),
         el('div', { class: 'actions' }, save, done));

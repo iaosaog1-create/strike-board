@@ -110,7 +110,7 @@
       const cards = rs.map((r) => {
         const z = S.sel.get(r.log_id) || 0;
         return el('button', { type: 'button', class: 'pp' + (z ? ' on' : ''), 'aria-pressed': String(!!z), onclick: tap(r) },
-          el('b', {}, r.name), el('small', {}, z ? `✔ ${zoneLabel(D, z)}` : vendorOf(r)));
+          el('b', {}, r.name), el('small', {}, z ? `✔ ${String(zoneName(D.zones.find((x) => x.id === z) || {})).split('·').pop().trim()}` : vendorOf(r)));
       });
       const confirmBtn = (r, kind) => {
         const ok = kind === 'in' ? r.in_ok : r.out_ok;
