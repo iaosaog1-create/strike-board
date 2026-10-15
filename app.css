@@ -718,3 +718,73 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
   .gcard>.gsup{grid-column:2;grid-row:3}
   .gcard>.hint{grid-column:1/-1}
 }
+/* ===== 카드형 입력 (인력 입력 · 지원 배치) ===== */
+.zgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.zc{background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px 8px 10px;box-shadow:0 1px 4px rgba(20,40,70,.06);display:flex;flex-direction:column;gap:6px;min-width:0}
+.zc .zch{display:flex;flex-direction:column;gap:1px;min-width:0}
+.zc .zch b{font-size:13px;font-weight:700;color:var(--navy);line-height:1.25;word-break:keep-all}
+.zc .zch small{font-size:11px;color:var(--sub)}
+.stepper{display:grid;grid-template-columns:34px 1fr 34px;gap:5px;align-items:center}
+.stepper .stp{height:34px;border:0;border-radius:10px;background:var(--teal-bg);color:var(--teal);font-size:20px;font-weight:700;line-height:1;cursor:pointer;padding:0}
+.stepper .stp:active{background:var(--teal);color:#fff}
+.stepper input{min-height:34px;height:34px;width:100%;text-align:center;font-size:17px;font-weight:700;color:var(--navy);padding:0 2px;border-radius:10px;background:var(--slate);border:1px solid #D3DEE6}
+.zbar{height:5px;border-radius:4px;background:var(--slate);overflow:hidden}
+.zbar i{display:block;height:100%;width:0;border-radius:4px;background:#9DBCC2;transition:width .15s}
+.zbar i.ok{background:var(--teal)}.zbar i.low{background:#E39A94}
+.zc .zl{display:flex;flex-direction:column;gap:2px}
+.zc .zl span{font-size:11px;font-weight:700;color:var(--sub)}
+.zc .zl+.zl{margin-top:2px}
+@media (min-width:761px){.zgrid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}}
+/* ===== 글씨 크기 통일 (남은 화면) ===== */
+.qrow>b:first-child,.qrow.sum,.info b,.list-item b,.teamrow b,.filebtn,.name,.zt b,.lackrow b,.lk-n,.zrow b{font-size:13px}
+.list-item small,.zn,.zrow small,.zt small{font-size:11px}
+.zn b{font-size:15px}
+.fl{font-size:13px;margin:10px 0 0}
+.divh,h2.divh{font-size:14px}
+.divh2{font-size:14px}
+.lk-m{font-size:14px}
+.agrid input,.mini input{font-size:15px;min-height:36px}
+.absbox b{font-size:20px}
+.detail-wrap .back{font-size:14px}
+.sumbar b{font-size:20px}.sumbar small{font-size:11px}.sumbar span{font-size:11px}
+.tile b{font-size:14px}.tile span{font-size:11px}
+.note{font-size:12px}
+.pin{font-size:20px}
+.linkbtn{font-size:13px}
+.qrow{padding:6px 0}
+.tbl{font-size:13px}.tbl th,.tbl td{padding:6px 4px}
+/* ===== 상황판: 폰은 컴팩트, PC/TV는 큰 숫자 ===== */
+.board{background:#F3F5F8}
+.bcard{background:var(--t1)}.bcard.dv-t1,.bcard.dv-t2,.bcard.dv-bd{background:#E3EDF0;color:var(--navy)}
+.bhead b,.bname,.bbig,.black h2{color:var(--navy)}
+@media (max-width:700px){
+  .board{padding:10px 12px;gap:10px}
+  .bhead{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
+  .bhead>div:first-child{grid-column:1/-1}
+  .bhead b{font-size:15px;display:block;white-space:nowrap}
+  .bhead span{font-size:11px;display:block;margin-top:1px}
+  .bclock{font-size:22px;font-weight:700}
+  .bhead .btn{min-height:32px;font-size:12px;padding:0 12px;margin:0;width:auto}
+  .bcards{grid-template-columns:1fr;gap:8px}
+  .bcard{border-radius:16px;padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:0 12px;align-items:center;text-align:left}
+  .bname{font-size:15px;grid-row:1/3}
+  .bbig{font-size:34px;line-height:1.1}.bbig small{font-size:12px}
+  .bpct{font-size:18px;text-align:right}
+  .bsub{font-size:11px;grid-column:2/-1}
+  .black h2{font-size:14px;margin-bottom:6px}
+  .brow{font-size:13px;padding:6px 8px;gap:8px}.brow .lk-dv{font-size:11px;padding:1px 8px}.brow .lk-m{font-size:14px}
+  .blist{gap:6px}
+}
+@media (max-width:700px){.black{flex:0 0 auto;border-radius:16px;padding:10px 12px}.board{overflow:auto}}
+.zgrid .zc:last-child:nth-child(odd){grid-column:1/-1}
+.sumbar b{font-size:17px}.sumbar>div{gap:2px}
+.qrow.hd{font-size:11px;margin-top:6px}
+.qrow{margin-top:6px;gap:8px;grid-template-columns:minmax(48px,1fr) 96px 96px}
+.qrow input{min-height:34px;font-size:15px}
+.qrow.sum{padding-top:8px;font-size:13px}
+.black{flex:0 0 auto}
+.agrid{grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:6px 8px}
+.agrid label.f>span{font-size:12px;margin-bottom:2px}
+.agrid label.f{margin-top:4px}
+.absbox{margin-top:10px;padding:8px 12px}.absbox span{font-size:13px}.absbox small{font-size:12px}
+@media (min-width:761px){.zgrid .zc:last-child:nth-child(odd){grid-column:auto}.zgrid{grid-template-columns:repeat(auto-fill,minmax(200px,240px))}}

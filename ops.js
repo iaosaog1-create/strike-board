@@ -97,6 +97,14 @@
   const loadQuota = () => q(sb.from('staffing_quota').select('division_id,shift,daily_quota,full_quota'));
   const noZones = () => el('div', { class: 'card' }, el('p', { class: 'empty' },
     '등록된 구역이 없습니다. 관리자가 "구역·정원 설정"에서 구역을 먼저 등록해야 합니다'));
+  /* 숫자 입력 − [ n ] + (손가락으로 누르기 쉬운 카드형 입력) */
+  const stepper = (inp) => {
+    const bump = (d) => { const v = toInt(inp.value) || 0; inp.value = String(Math.max(0, v + d)); inp.dispatchEvent(new Event('input', { bubbles: true })); };
+    return el('div', { class: 'stepper' },
+      el('button', { type: 'button', class: 'stp', 'aria-label': '1명 줄이기', onclick: () => bump(-1) }, '−'),
+      inp,
+      el('button', { type: 'button', class: 'stp', 'aria-label': '1명 늘리기', onclick: () => bump(1) }, '+'));
+  };
   const floorHead = (side, floor) => el('h3', { class: 'fl' }, `${side} · ${floor}`);
 
   /* =========================================================
@@ -119,14 +127,17 @@
     const calc = () => { totalEl.textContent = String([...inputs.values()].reduce((t, i) => t + (toInt(i.value) || 0), 0)); };
     const sections = groupZones(zones).map((s) => s.floors.map((f) => el('div', { class: 'card' },
       floorHead(s.side, f.floor),
-      f.zones.map((z) => {
+      el('div', { class: 'zgrid' }, f.zones.map((z) => {
         const inp = numIn(last.has(z.id) ? last.get(z.id).headcount : '', zoneName(z));
-        inp.addEventListener('input', calc);
+        const fill = el('i', {});
+        const upd = () => { const v = toInt(inp.value) || 0; const r = z.required > 0 ? v / z.required : 0; fill.style.width = Math.min(100, Math.round(r * 100)) + '%'; fill.className = z.required > 0 ? (v >= z.required ? 'ok' : 'low') : ''; };
+        inp.addEventListener('input', calc); inp.addEventListener('input', upd); upd();
         inputs.set(z.id, inp);
-        return el('div', { class: 'zin' },
-          el('div', {}, el('b', {}, zoneName(z)), el('small', {}, `필요 ${z.required}명`)),
-          el('div', { class: 'zact' }, inp, el('span', {}, '명')));
-      }))));
+        return el('div', { class: 'zc' },
+          el('div', { class: 'zch' }, el('b', {}, zoneName(z)), el('small', {}, `필요 ${z.required}명`)),
+          stepper(inp),
+          el('div', { class: 'zbar' }, fill));
+      })))));
     calc();
     const save = el('button', { class: 'btn', type: 'button' }, '저장');
     save.addEventListener('click', busy(save, async () => {
@@ -516,13 +527,13 @@
     };
     const cols = depts.map((d) => [d.name, '지원', d.id]);   // 협정은 '협정 출퇴근' 화면에서 이름으로 배치
     const secs = groupZones(zones).map((s) => s.floors.map((f) => el('div', { class: 'card' }, floorHead(s.side, f.floor),
-      f.zones.map((z) => el('div', { class: 'zin multi' },
-        el('div', {}, el('b', {}, zoneName(z)), el('small', {}, `필요 ${z.required}명`)),
-        el('div', { class: 'mini' }, ...cols.map(([label, source, dept]) => {
+      el('div', { class: 'zgrid' }, f.zones.map((z) => el('div', { class: 'zc' },
+        el('div', { class: 'zch' }, el('b', {}, zoneName(z)), el('small', {}, `필요 ${z.required}명`)),
+        ...cols.map(([label, source, dept]) => {
           const k = key(z.id, source, dept);
           const inp = numIn(last.has(k) ? last.get(k) : '', `${zoneName(z)} ${label}`);
           inp.addEventListener('input', calc); inputs.set(k, inp);
-          return el('label', {}, el('span', {}, label), inp);
+          return el('div', { class: 'zl' }, el('span', {}, label), stepper(inp));
         })))))));
     calc();
     const save = el('button', { class: 'btn', type: 'button' }, '저장');
