@@ -20,21 +20,25 @@
   const NONE = 'none';
 
   const root = document.getElementById('app');
-  const state = { me: null, menu: 'home', tab: 'pending', members: [], counts: {}, selected: null, divisions: [], setup: { tab: 'quota', div: null, shifts: [], quota: [], zones: [], tasks: [] } };
+  const state = { me: null, menu: 'home', tab: 'pending', members: [], counts: {}, selected: null, divisions: [], timers: [], setup: { tab: 'quota', div: null, shifts: [], quota: [], zones: [], tasks: [] } };
 
   /* ---------- 작은 도구 ---------- */
   // 화면에 그릴 때는 항상 textContent 로만 넣어서 입력값이 코드로 해석되지 않게 함
+  /* replaceChildren 에 배열·빈 값을 넘겨도 안전하게 */
+  const _rc = Element.prototype.replaceChildren;
+  Element.prototype.replaceChildren = function (...k) { return _rc.apply(this, k.flat(Infinity).filter((x) => x != null && x !== false)); };
   function el(tag, props, ...kids) {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(props || {})) {
       if (v == null || v === false) continue;
       if (k === 'class') n.className = v;
       else if (k === 'text') n.textContent = v;
+      else if (k === 'style') n.style.cssText = v; /* CSP 허용(CSSOM) */
       else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
       else if (v === true) n.setAttribute(k, '');
       else n.setAttribute(k, v);
     }
-    for (const kid of kids.flat()) {
+    for (const kid of kids.flat(Infinity)) {
       if (kid == null || kid === false) continue;
       n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
     }
@@ -233,33 +237,42 @@
     const { data } = await sb.from('divisions').select('id,name,kind').order('sort');
     state.divisions = data || [];
   }
+  /* 화면 등록: 각 기능 파일이 register() 로 자기 화면을 추가합니다 */
+  const SCREENS = [];
+  const MENU_ORDER = ['home', 'input', 'place', 'att', 'status', 'setup', 'coop', 'leave', 'report', 'approve'];
+  const ALL_ROLES = ['leader', 'chief', 'admin', 'master'];
+  function register(key, label, roles, render, desc) { SCREENS.push({ key, label, roles, render, desc }); }
+  const stopTimers = () => { (state.timers || []).forEach(clearInterval); state.timers = []; };
+
   function mainView() {
+    stopTimers();
     const me = state.me;
-    const menus = [['home', '홈']];
-    if (me.role === 'master' || me.role === 'admin') menus.push(['setup', '구역·정원 설정']);
-    if (me.role === 'master') menus.push(['approve', '가입 승인']);
-    if (!menus.some(([k]) => k === state.menu)) state.menu = 'home';
-    const nav = el('nav', { class: 'menu', 'aria-label': '메뉴' }, ...menus.map(([k, label]) =>
-      el('button', { type: 'button', class: state.menu === k ? 'on' : '', onclick: () => { state.menu = k; mainView(); } },
-        label, k === 'approve' && state.counts.pending ? el('span', { class: 'cnt' }, state.counts.pending) : null)));
+    const menus = SCREENS.filter((s) => s.roles.includes(me.role))
+      .sort((a, b) => MENU_ORDER.indexOf(a.key) - MENU_ORDER.indexOf(b.key));
+    if (!menus.some((s) => s.key === state.menu)) state.menu = 'home';
+    const nav = el('nav', { class: 'menu', 'aria-label': '메뉴' }, ...menus.map((s) =>
+      el('button', { type: 'button', class: state.menu === s.key ? 'on' : '', onclick: () => { state.menu = s.key; mainView(); } },
+        s.label, s.key === 'approve' && state.counts.pending ? el('span', { class: 'cnt' }, state.counts.pending) : null)));
     const who = el('div', { class: 'who' }, el('b', {}, me.name), [ROLE_LABEL[me.role], shortDiv(divName(me.division_id)), me.team ? me.team + '팀' : ''].filter(Boolean).join(' · '));
     const body = el('div', {});
     mount(topbar(el('div', { class: 'top-right', style: null }, who)), el('main', { class: 'shell' }, nav, body));
     root.querySelector('.top').append(el('button', { class: 'btn-out', type: 'button', onclick: logoutThenLogin }, '로그아웃'));
-    if (state.menu === 'approve') approveView(body); else if (state.menu === 'setup') setupView(body); else homeView(body);
+    const cur = menus.find((s) => s.key === state.menu);
+    Promise.resolve(cur.render(body)).catch((e) => {
+      console.error(e);
+      body.replaceChildren(el('p', { class: 'empty' }, '화면을 불러오지 못했습니다. 새로고침 해 주세요'));
+    });
   }
   function homeView(body) {
     const me = state.me;
-    const items = {
-      leader: [['인력 입력', '자기 팀 인원을 구역별로 입력'], ['출근 현황', '출근·휴무·연차 등 입력'], ['구역 현황', '내 사업부 구역별 인원 확인']],
-      chief: [['협정·지원 배치', '출근한 협정 인원을 구역에 배치'], ['출근 현황', '사업부 합계 확인'], ['구역 현황', '구역별 인원 확인']],
-      admin: [['구역 현황', '전체 사업부 확인'], ['구역·정원 설정', '구역·정원·협정사 업체 관리'], ['시각별 저장·보고서', '시각별 저장과 엑셀/PDF 출력']],
-      master: [['구역 현황', '전체 사업부 확인'], ['구역·정원 설정', '구역·정원·협정사 업체 관리'], ['협정인력 관리', '명단·PIN·QR 장소 관리'], ['시각별 저장·보고서', '시각별 저장과 엑셀/PDF 출력']]
-    }[me.role] || [];
+    const mine = SCREENS.filter((s) => s.key !== 'home' && s.roles.includes(me.role) && s.desc)
+      .sort((a, b) => MENU_ORDER.indexOf(a.key) - MENU_ORDER.indexOf(b.key));
     body.append(el('div', { class: 'card' },
       el('h2', {}, `${me.name}님, 안녕하세요`),
-      el('p', { class: 'hint' }, '로그인이 완료되었습니다. 아래 기능은 순서대로 추가됩니다.'),
-      el('div', { class: 'soon' }, ...items.map(([t, d]) => el('div', {}, el('b', {}, t), el('span', {}, d + ' · 준비 중'))))));
+      el('p', { class: 'hint' }, '아래에서 사용할 기능을 선택하세요.'),
+      el('div', { class: 'tiles' }, ...mine.map((s) =>
+        el('button', { type: 'button', class: 'tile', onclick: () => { state.menu = s.key; mainView(); } },
+          el('b', {}, s.label), el('span', {}, s.desc))))));
   }
 
   /* ---------- 가입 승인 (최고관리자 전용) ---------- */
@@ -531,11 +544,30 @@
     loginView();
   }
 
-  (async function start() {
-    try {
-      const { data } = await sb.auth.getSession();
-      if (data && data.session) return await enter();
-    } catch (e) { /* 로그인 화면으로 */ }
-    loginView();
-  })();
+  /* ---------- 화면 등록 + 다른 기능 파일에 공유할 도구 ---------- */
+  register('home', '홈', ALL_ROLES, homeView);
+  register('setup', '구역·정원 설정', ['master', 'admin'], setupView, '구역·정원·업무 종류를 직접 입력');
+  register('approve', '가입 승인', ['master'], approveView, '가입 신청을 확인하고 권한 지정');
+
+  /* 인쇄(PDF 저장): 화면의 내용을 인쇄 전용 영역에 담아 브라우저 인쇄창을 엽니다 */
+  function printNode(node) {
+    const area = document.getElementById('print-area');
+    area.replaceChildren(node);
+    document.body.classList.add('printing');
+    const done = () => { document.body.classList.remove('printing'); area.replaceChildren(); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(() => window.print(), 60);
+  }
+
+  window.APP = {
+    sb, CFG, state, el, seg, busy, toast, mount, register, numIn, toInt, bizDivs, divName, shortDiv, ROLE_LABEL, printNode,
+    reload: () => mainView(),
+    start: async function start() {
+      try {
+        const { data } = await sb.auth.getSession();
+        if (data && data.session) return await enter();
+      } catch (e) { /* 로그인 화면으로 */ }
+      loginView();
+    }
+  };
 })();
