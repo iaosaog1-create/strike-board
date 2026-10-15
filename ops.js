@@ -265,15 +265,16 @@
     if (!o.basis || !o.basisSet) { o.basis = [...shiftList()]; o.basisSet = true; }
     if (!isMaster(me) && o.division === 'all') o.division = me.division_id;
     const redraw = () => statusView(body);
-    let cache = null; let fdiv = null; let teamRows = null; let attRows = [];
+    let cache = null; let fdiv = null; let teamRows = null; let attRows = []; let rosterRows = [];
     const refresh = async () => {
       let zones, rows, quota;
       try {
-        [zones, rows, quota, teamRows, attRows] = await Promise.all([
+        [zones, rows, quota, teamRows, attRows, rosterRows] = await Promise.all([
           q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active')),
           loadLatest(o.date, o.division === 'all' ? null : o.division), loadQuota(),
           sb.rpc('leave_team', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null),
-          sb.from('attendance_latest').select('division_id,shift,present,day_off,annual,health,leave_long,sick,other').eq('work_date', o.date).then((r) => (r.error ? [] : r.data || []), () => [])]);
+          sb.from('attendance_latest').select('division_id,shift,present,day_off,annual,health,leave_long,sick,other').eq('work_date', o.date).then((r) => (r.error ? [] : r.data || []), () => []),
+          sb.rpc('team_roster', { p_date: o.date, p_team: null }).then((r) => (r.error ? [] : r.data || []), () => [])]);
       } catch (e) { return body.replaceChildren(pickers(o, redraw, { shiftPick: false, allDiv: true }), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); }
       draw(zones, rows, quota);
     };
@@ -341,29 +342,41 @@
       if (teamRows === null) teamCard.append(el('p', { class: 'hint' }, '팀별 집계를 불러오지 못했습니다. 08_team.sql 실행 여부를 확인하세요'));
       else if (!teamRows.length) teamCard.append(el('p', { class: 'hint' }, '휴무계획을 업로드하면 팀별 정원이 나옵니다'));
       else {
-        teamCard.append(el('p', { class: 'hint' }, '정원 = 휴무계획 명단, 출근 예정 = 정원 − 주휴·연차·휴직 등. 결근 = 정원 − 출근 − 근태(휴무·연차·병가·기타 등), 출근 현황을 입력한 근무조만 계산됩니다.'));
+        teamCard.append(el('p', { class: 'hint' }, '정원 = 휴무계획 명단, 근태 = 주휴·연차·병가·휴직·보건·검진·기타. 출근 = 팀장이 이름으로 체크한 인원, 결근 = 정원 − 근태 − 출근 (팀장이 "출근 체크 완료"를 누른 팀만 확정, 괄호는 미확인 인원).'));
+        const tnum = (t) => String(t || '').replace(/\D/g, '') || String(t || '').trim();
         for (const d of divs) {
-          const tr = teamRows.filter((t) => t.division_id === d.id).sort((a, b) => a.team.localeCompare(b.team, 'ko', { numeric: true }));
+          const tr = teamRows.filter((t) => t.division_id === d.id).sort((x, y) => x.team.localeCompare(y.team, 'ko', { numeric: true }));
           if (!tr.length) continue;
-          const sum = tr.reduce((s, t) => ({ r: s.r + t.roster, a: s.a + t.absent }), { r: 0, a: 0 });
-          const trows = tr.map((t) => el('tr', {}, el('th', {}, t.team), el('td', {}, t.shift), el('td', {}, t.roster), el('td', {}, t.absent), el('td', { class: 'b' }, t.roster - t.absent)));
-          trows.push(el('tr', { class: 'sum' }, el('th', {}, '합계'), el('td', {}, ''), el('td', {}, sum.r), el('td', {}, sum.a), el('td', { class: 'b' }, sum.r - sum.a)));
-          const shifts = [...new Set([...shiftList(), ...tr.map((t) => t.shift)])].filter((s) => tr.some((t) => t.shift === s) || rows.some((r) => r.division_id === d.id && r.shift === s));
+          // 팀별: 정원·근태(휴무계획+ERP) + 출근·결근(팀장 이름 체크)
+          const tm = tr.map((t) => {
+            const rs = rosterRows.filter((r) => r.division_id === d.id && tnum(r.team) === tnum(t.team));
+            const has = rs.some((r) => r.checked || r.closed); const closed = rs.length > 0 && rs[0].closed;
+            const present = rs.filter((r) => r.checked).length;
+            const rest = rs.filter((r) => !r.checked && !['off', 'hold', 'annual', 'health', 'sick', 'other'].includes(r.leave_kind)).length;
+            return { team: t.team, shift: t.shift, roster: t.roster, leave: t.absent, has, closed, present, men: rs.filter((r) => r.checked && r.gender === '남').length, women: rs.filter((r) => r.checked && r.gender === '여').length, ab: closed ? rest : null, wait: has && !closed ? rest : null };
+          });
+          const S0 = tm.reduce((s, t) => ({ r: s.r + t.roster, l: s.l + t.leave, p: s.p + t.present, m: s.m + t.men, w: s.w + t.women, a: s.a + (t.ab || 0), any: s.any || t.has }), { r: 0, l: 0, p: 0, m: 0, w: 0, a: 0, any: false });
+          const cellP = (t) => (t.has ? t.present : '-');
+          const cellA = (t) => (t.ab != null ? el('td', { class: 'pc ' + (t.ab ? 'low' : 'none') }, t.ab) : el('td', {}, t.wait != null ? `(${t.wait})` : '-'));
+          const trows = tm.map((t) => el('tr', {}, el('th', {}, t.team), el('td', {}, t.shift), el('td', {}, t.roster), el('td', {}, t.leave), el('td', { class: 'b' }, cellP(t)), el('td', {}, t.has ? `${t.men}·${t.women}` : '-'), cellA(t)));
+          trows.push(el('tr', { class: 'sum' }, el('th', {}, '합계'), el('td', {}, ''), el('td', {}, S0.r), el('td', {}, S0.l), el('td', { class: 'b' }, S0.any ? S0.p : '-'), el('td', {}, S0.any ? `${S0.m}·${S0.w}` : '-'), el('td', { class: 'pc ' + (S0.a ? 'low' : 'none') }, S0.any ? S0.a : '-')));
+          // 근무조별 합산 (오전+오후+야간…)
+          const shifts = [...new Set([...shiftList(), ...tm.map((t) => t.shift)])].filter((s) => tm.some((t) => t.shift === s) || rows.some((r) => r.division_id === d.id && r.shift === s));
           const T = { r: 0, k: 0, p: 0, a: 0, c: 0, any: false };
           const srows = shifts.map((s) => {
-            const rs = tr.filter((t) => t.shift === s).reduce((n, t) => n + t.roster, 0);
-            const at = attRows.find((x) => x.division_id === d.id && x.shift === s);
+            const ts = tm.filter((t) => t.shift === s); const rs = ts.reduce((n, t) => n + t.roster, 0);
             const cu = sumBy(rows, (x) => x.division_id === d.id && x.shift === s).total;
-            const kt = at ? ATT_LEAVE.reduce((n, k) => n + (at[k] || 0), 0) : null;
-            const ab = at ? Math.max(0, rs - at.present - kt) : null;
-            T.r += rs; T.c += cu; if (at) { T.any = true; T.k += kt; T.p += at.present; T.a += ab; }
-            return el('tr', {}, el('th', {}, s), el('td', {}, rs || '-'), el('td', {}, at ? kt : '-'), el('td', { class: 'b' }, at ? at.present : '-'),
-              el('td', { class: 'pc ' + (ab ? 'low' : 'none') }, at ? ab : '-'), el('td', {}, cu));
+            let kt = null, pr = null, ab = null;
+            if (ts.some((t) => t.has)) { kt = ts.reduce((n, t) => n + t.leave, 0); pr = ts.reduce((n, t) => n + t.present, 0); ab = ts.reduce((n, t) => n + (t.ab || 0), 0); }
+            else { const at = attRows.find((x) => x.division_id === d.id && x.shift === s); if (at) { kt = ATT_LEAVE.reduce((n, k) => n + (at[k] || 0), 0); pr = at.present; ab = Math.max(0, rs - at.present - kt); } }
+            T.r += rs; T.c += cu; if (kt != null) { T.any = true; T.k += kt; T.p += pr; T.a += ab; }
+            return el('tr', {}, el('th', {}, s), el('td', {}, rs || '-'), el('td', {}, kt == null ? '-' : kt), el('td', { class: 'b' }, pr == null ? '-' : pr),
+              el('td', { class: 'pc ' + (ab ? 'low' : 'none') }, ab == null ? '-' : ab), el('td', {}, cu));
           });
           srows.push(el('tr', { class: 'sum' }, el('th', {}, '하루 합계'), el('td', {}, T.r || '-'), el('td', {}, T.any ? T.k : '-'), el('td', { class: 'b' }, T.any ? T.p : '-'),
             el('td', { class: 'pc ' + (T.a ? 'low' : 'none') }, T.any ? T.a : '-'), el('td', {}, T.c)));
           teamCard.append(el('h3', { class: 'divh2 ' + divTone(d.id) }, d.name),
-            el('div', { class: 'tblwrap' }, el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, ...['팀', '근무조', '정원', '휴무·휴가', '출근 예정'].map((h) => el('th', {}, h)))), el('tbody', {}, trows))),
+            el('div', { class: 'tblwrap' }, el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, ...['팀', '근무조', '정원', '근태', '출근', '남·여', '결근'].map((h) => el('th', {}, h)))), el('tbody', {}, trows))),
             el('div', { class: 'tblwrap' }, el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, ...['근무조', '정원', '근태', '출근', '결근', '현재 배치'].map((h) => el('th', {}, h)))), el('tbody', {}, srows))));
         }
       }
@@ -386,7 +399,8 @@
         return el('div', { class: 'rm ' + t },
           el('div', { class: 'rt' }, el('b', {}, z.task + (z.label ? ` (${z.label})` : '')), z.required > 0 ? el('span', { class: 'bd' }, lack ? `${ICO[t]} 부족 ${lack}` : '✔ 충족') : null),
           el('div', { class: 'rn' }, String(sm.total), el('small', {}, z.required > 0 ? `/ 필요 ${z.required}명` : '필요 인원 미설정')),
-          el('div', { class: 'rs' }, `현장투입 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`));
+          el('div', { class: 'rs' }, `현장투입 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`),
+          (() => { const g = rosterRows.filter((r) => r.zone_id === z.id && r.checked && inB(r)); return g.length ? el('div', { class: 'rs gn' }, `남 ${g.filter((r) => r.gender === '남').length} · 여 ${g.filter((r) => r.gender === '여').length}` + (g.some((r) => !r.gender) ? ` · 미정 ${g.filter((r) => !r.gender).length}` : '')) : null; })());
       };
       const floorCard = (side, f) => {
         const tot = f.zones.reduce((t, z) => t + sumBy(rows, (x) => x.zone_id === z.id && inB(x)).total, 0); const req = f.zones.reduce((t, z) => t + (z.required || 0), 0);

@@ -394,3 +394,28 @@ input:focus,select:focus,button:focus-visible{outline:3px solid #6FA0EC;outline-
 
 .absbox{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:14px;background:#FDF1EF;border:1px solid #F3CBC5;border-radius:14px;padding:12px 14px}
 .absbox span{font-weight:800;color:#B4423C}.absbox b{font-size:26px;color:#B4423C}.absbox small{color:var(--sub);font-size:14px}
+
+/* 출근 체크 */
+.menu.solo{display:none}
+.ck-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ck-tile{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 4px;text-align:center}
+.ck-tile b{display:block;font-size:26px;font-weight:800;line-height:1.2}.ck-tile span{font-size:13px;color:var(--sub);font-weight:700}
+.ck-tile.ok b{color:#2FA67C}.ck-tile.low b{color:#E2705F}.ck-tile.mid b{color:#D98A00}
+.ppgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:8px}
+.pp{min-height:66px;border:1px solid var(--field-line);border-radius:14px;background:#fff;padding:6px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.pp b{font-size:18px;font-weight:800}.pp small{font-size:12px;color:var(--sub);line-height:1.2;text-align:center}
+.pp.on{background:#E3F6EE;border:2px solid #2FA67C}.pp.on small{color:#1d7a5a;font-weight:700}
+.pp.leave{background:#EDEFF2;color:#8a909c;cursor:default;border-style:dashed}.pp.leave small{font-weight:700}
+.pp.half{border-color:#E0A020}
+.ck-names{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.ck-chip{display:inline-flex;align-items:baseline;gap:6px;border-radius:999px;padding:6px 12px;background:var(--chip);font-weight:700;font-size:16px}
+.ck-chip small{font-size:12px;font-weight:700;color:var(--sub)}
+.ck-chip.on{background:#E3F6EE}.ck-chip.abs{background:#FDE7E3;color:#B4423C}.ck-chip.wait{background:#FFF1D6}.ck-chip.lv{background:#EDEFF2}
+.tbl tr.click{cursor:pointer}.tbl tr.click:hover{background:#F6F7F9}
+
+.pp.gm{border-left:5px solid #5B8DEF}.pp.gf{border-left:5px solid #E9729B}
+.pp.gm.on{border-left:5px solid #5B8DEF}.pp.gf.on{border-left:5px solid #E9729B}
+.pp.gx small{color:#B4423C}
+.ck-chip.gm{box-shadow:inset 4px 0 0 #5B8DEF}.ck-chip.gf{box-shadow:inset 4px 0 0 #E9729B}
+.ck-gline{margin:8px 2px 0;font-weight:800;font-size:15px;color:var(--ink)}
+.rs.gn{font-weight:800}
