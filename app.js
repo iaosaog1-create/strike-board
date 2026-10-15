@@ -17,6 +17,7 @@
   };
   const STATUS_LABEL = { pending: '대기', approved: '승인', rejected: '반려' };
   const INITIAL_PW = '000000';
+  const NONE = 'none';
 
   const root = document.getElementById('app');
   const state = { me: null, menu: 'home', tab: 'pending', members: [], counts: {}, selected: null, divisions: [] };
@@ -115,15 +116,24 @@
     const f = { div: '', emp: '', name: '', title: '팀장', team: '' };
     let divisions = [];
     try {
-      const { data, error } = await sb.from('divisions').select('id,name').eq('kind', '사업부').order('sort');
+      const { data, error } = await sb.from('divisions').select('id,name,kind').order('sort');
       if (error) throw error;
       divisions = data || [];
     } catch (e) { /* 아래에서 안내 */ }
 
     const box = errBox();
-    const divSel = el('select', { 'aria-label': '사업부' },
-      el('option', { value: '' }, '선택하세요'), ...divisions.map((d) => el('option', { value: d.id }, d.name)));
+    const divSel = el('select', { 'aria-label': '소속' });
     divSel.addEventListener('change', () => { f.div = divSel.value; });
+    /* 팀장·총괄팀장은 사업부만, 관리는 모든 소속 + 소속 없음 */
+    const drawDivs = () => {
+      const all = f.title === '관리';
+      const list = all ? divisions : divisions.filter((d) => d.kind === '사업부');
+      if (!list.some((d) => String(d.id) === f.div) && f.div !== NONE) f.div = '';
+      divSel.replaceChildren(el('option', { value: '' }, '선택하세요'),
+        ...list.map((d) => el('option', { value: d.id }, d.name)),
+        ...(all ? [el('option', { value: NONE }, '소속 없음')] : []));
+      divSel.value = f.div;
+    };
     const empIn = el('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', 'aria-label': '사번' });
     const nameIn = el('input', { type: 'text', autocomplete: 'name', maxlength: '20', 'aria-label': '이름' });
     const teamField = el('label', { class: 'f' });
@@ -133,36 +143,37 @@
         seg(TEAMS.map((t) => [t, t + '팀']), f.team, (v) => { f.team = v; }));
     };
     const titleSeg = seg([['관리', '관리'], ['팀장', '팀장'], ['총괄팀장', '총괄팀장']], f.title, (v) => {
-      f.title = v; if (v !== '팀장') f.team = ''; drawTeam();
+      f.title = v; if (v !== '팀장') f.team = ''; drawTeam(); drawDivs();
     });
-    drawTeam();
+    drawTeam(); drawDivs();
     const go = el('button', { class: 'btn', type: 'submit' }, '가입 신청');
     const form = el('form', { novalidate: true },
-      el('label', { class: 'f' }, el('span', {}, '사업부'), divSel),
+      el('div', { class: 'f' }, el('span', { class: 'hint' }, '직책'), titleSeg),
+      el('label', { class: 'f' }, el('span', {}, '소속'), divSel),
+      teamField,
       el('label', { class: 'f' }, el('span', {}, '사번'), empIn),
       el('label', { class: 'f' }, el('span', {}, '이름'), nameIn),
-      el('div', { class: 'f' }, el('span', { class: 'hint' }, '직책'), titleSeg), teamField,
       el('p', { class: 'hint' }, `초기 비밀번호 ${INITIAL_PW} · 첫 로그인 때 변경`),
       box, go);
     form.addEventListener('submit', busy(go, async () => {
       box.hidden = true;
       f.emp = empIn.value.trim(); f.name = nameIn.value.trim();
-      if (!f.div) return showErr(box, '사업부를 선택하세요');
+      if (!f.div) return showErr(box, '소속을 선택하세요');
       if (!/^[A-Za-z0-9]{2,20}$/.test(f.emp)) return showErr(box, '사번을 확인하세요 (영문·숫자)');
       if (f.name.length < 2) return showErr(box, '이름을 입력하세요');
       if (f.title === '팀장' && !f.team) return showErr(box, '팀장은 소속 팀을 선택하세요');
       const { error } = await sb.auth.signUp({
         email: emailOf(f.emp), password: INITIAL_PW,
-        options: { data: { emp_no: f.emp, name: f.name, division_id: Number(f.div), req_title: f.title, team: f.team || null } }
+        options: { data: { emp_no: f.emp, name: f.name, division_id: f.div === NONE ? null : Number(f.div), req_title: f.title, team: f.team || null } }
       });
       if (error) return showErr(box, signupMessage(error));
       await sb.auth.signOut().catch(() => {});
-      waitView({ division: divName2(divisions, f.div), emp: f.emp, name: f.name, title: f.title, team: f.team });
+      waitView({ division: f.div === NONE ? '소속 없음' : divName2(divisions, f.div), emp: f.emp, name: f.name, title: f.title, team: f.team });
     }));
     mount(topbar(el('button', { class: 'btn-out', type: 'button', onclick: loginView }, '로그인으로')),
       el('main', { class: 'wrap' },
         el('h2', { class: 'title' }, '가입 신청'),
-        divisions.length ? null : el('div', { class: 'err' }, '사업부 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요'),
+        divisions.length ? null : el('div', { class: 'err' }, '소속 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요'),
         el('div', { class: 'card' }, form),
         el('p', { class: 'note' }, '관리자 승인 후 사용할 수 있습니다')));
   }
@@ -170,7 +181,7 @@
   function signupMessage(error) {
     const m = (error.message || '').toLowerCase();
     if (m.includes('already')) return '이미 가입된 사번입니다. 로그인하거나 관리자에게 문의하세요';
-    if (m.includes('database error')) return '가입 정보를 확인하세요 (사업부·직책·팀)';
+    if (m.includes('database error')) return '가입 정보를 확인하세요 (소속·직책·팀)';
     if (m.includes('invalid') && m.includes('email')) return '계정 형식 오류입니다. 관리자에게 문의하세요 (config.js 의 EMAIL_DOMAIN)';
     if (m.includes('rate') || error.status === 429) return '시도가 많습니다. 잠시 후 다시 시도하세요';
     return '가입할 수 없습니다. 잠시 후 다시 시도하세요';
@@ -183,7 +194,7 @@
       el('h2', { class: 'title' }, rejected ? '가입이 반려되었습니다' : '승인을 기다리는 중입니다'),
       el('p', { class: 'lead' }, rejected ? '관리자에게 문의하세요' : '승인되면 로그인할 수 있습니다'),
       el('div', { class: 'card' }, el('div', { class: 'rows' },
-        row('사업부', s.division), row('사번', s.emp), row('이름', s.name),
+        row('소속', s.division), row('사번', s.emp), row('이름', s.name),
         row('직책', s.title), s.team ? row('소속 팀', s.team + '팀') : null)),
       el('p', { class: 'note' }, '최종 권한은 관리자가 승인할 때 정해집니다'),
       el('button', { class: 'btn ghost', type: 'button', onclick: logoutThenLogin }, '처음 화면으로')));
@@ -230,7 +241,7 @@
     const nav = el('nav', { class: 'menu', 'aria-label': '메뉴' }, ...menus.map(([k, label]) =>
       el('button', { type: 'button', class: state.menu === k ? 'on' : '', onclick: () => { state.menu = k; mainView(); } },
         label, k === 'approve' && state.counts.pending ? el('span', { class: 'cnt' }, state.counts.pending) : null)));
-    const who = el('div', { class: 'who' }, el('b', {}, me.name), `${ROLE_LABEL[me.role]} · ${shortDiv(divName(me.division_id))}${me.team ? ' · ' + me.team + '팀' : ''}`);
+    const who = el('div', { class: 'who' }, el('b', {}, me.name), [ROLE_LABEL[me.role], shortDiv(divName(me.division_id)), me.team ? me.team + '팀' : ''].filter(Boolean).join(' · '));
     const body = el('div', {});
     mount(topbar(el('div', { class: 'top-right', style: null }, who)), el('main', { class: 'shell' }, nav, body));
     root.querySelector('.top').append(el('button', { class: 'btn-out', type: 'button', onclick: logoutThenLogin }, '로그아웃'));
@@ -279,7 +290,7 @@
       },
         el('b', {}, `${m.name} `, el('small', {}, m.emp_no)),
         el('span', { class: 'badge ' + (m.status === 'pending' ? 'wait' : m.status === 'approved' ? 'ok' : 'no') }, STATUS_LABEL[m.status]),
-        el('small', {}, `${shortDiv(divName(m.division_id))} · ${m.status === 'approved' ? ROLE_LABEL[m.role] : m.req_title}${m.team ? ' · ' + m.team + '팀' : ''}`),
+        el('small', {}, [shortDiv(divName(m.division_id)) || '소속 없음', m.status === 'approved' ? ROLE_LABEL[m.role] : m.req_title, m.team ? m.team + '팀' : ''].join(' · ')),
         el('span', {}))) : [el('p', { class: 'empty' }, '해당하는 가입자가 없습니다')]));
     body.replaceChildren(el('div', { class: 'split' }, el('div', {}, tabs, list), detailPanel(body)));
   }
@@ -287,7 +298,9 @@
     const m = state.selected;
     const wrap = el('div', { class: 'detail-wrap' + (m ? ' open' : '') });
     if (!m) { wrap.append(el('div', { class: 'card empty' }, '왼쪽에서 가입자를 선택하세요')); return wrap; }
-    const pick = { role: m.status === 'approved' ? m.role : (TITLE_TO_ROLE[m.req_title] || 'leader'), team: m.team || '' };
+    const inBiz = (state.divisions.find((d) => d.id === m.division_id) || {}).kind === '사업부';
+    const roleOpts = inBiz ? ROLE_OPTIONS : ROLE_OPTIONS.filter(([k]) => k === 'admin');
+    const pick = { role: inBiz ? (m.status === 'approved' ? m.role : (TITLE_TO_ROLE[m.req_title] || 'leader')) : 'admin', team: m.team || '' };
     const desc = el('div', { class: 'info' });
     const drawDesc = () => desc.replaceChildren(el('b', {}, ROLE_LABEL[pick.role] + ' 권한'), ROLE_DESC[pick.role]);
     drawDesc();
@@ -296,7 +309,7 @@
       el('span', { class: 'hint' }, pick.role === 'leader' ? '소속 팀 (필수)' : '소속 팀 (선택)'),
       seg([...(pick.role === 'leader' ? [] : [['', '없음']]), ...TEAMS.map((t) => [t, t])], pick.team, (v) => { pick.team = v; }));
     drawTeam();
-    const roleSeg = seg(ROLE_OPTIONS, pick.role, (v) => { pick.role = v; drawDesc(); drawTeam(); });
+    const roleSeg = seg(roleOpts, pick.role, (v) => { pick.role = v; drawDesc(); drawTeam(); });
     const ok = el('button', { class: 'btn', type: 'button' }, m.status === 'approved' ? '변경 저장' : '승인');
     const no = el('button', { class: 'btn danger', type: 'button' }, '반려');
     const run = (approve) => async () => {
@@ -312,10 +325,11 @@
     wrap.append(
       el('button', { class: 'back', type: 'button', onclick: () => { state.selected = null; drawApprove(body); } }, '← 목록으로'),
       el('div', { class: 'card' },
-        el('div', { class: 'rows' }, row('이름', `${m.name} (${m.emp_no})`), row('사업부', divName(m.division_id)),
+        el('div', { class: 'rows' }, row('이름', `${m.name} (${m.emp_no})`), row('소속', divName(m.division_id) || '소속 없음'),
           row('신청 직책', m.req_title), row('신청 팀', m.team ? m.team + '팀' : '-'),
           row('현재 상태', STATUS_LABEL[m.status] + (m.status === 'approved' ? ' · ' + ROLE_LABEL[m.role] : ''))),
-        el('div', { class: 'f', style: null }, el('p', { class: 'hint' }, '최종 권한'), roleSeg), teamBox, desc,
+        el('div', { class: 'f', style: null }, el('p', { class: 'hint' }, '최종 권한'), roleSeg),
+        inBiz ? null : el('p', { class: 'hint' }, '사업부 소속이 아니어서 관리자 권한만 줄 수 있습니다'), teamBox, desc,
         el('div', { class: 'actions' }, ok, no)));
     return wrap;
   }

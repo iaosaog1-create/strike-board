@@ -90,3 +90,4 @@ input:focus,select:focus,button:focus-visible{outline:3px solid var(--blue);outl
   .detail-wrap .card{margin:0}
   .shell{padding:24px}
 }
+[hidden]{display:none!important}
