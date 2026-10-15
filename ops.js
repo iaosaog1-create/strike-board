@@ -499,7 +499,7 @@
       const rem = cnt.present - c;
       sums.rem.textContent = String(rem); sums.rem.className = rem < 0 ? 'neg' : '';
     };
-    const cols = [['협정', '협정', null], ...depts.map((d) => [d.name, '지원', d.id])];
+    const cols = depts.map((d) => [d.name, '지원', d.id]);   // 협정은 '협정 출퇴근' 화면에서 이름으로 배치
     const secs = groupZones(zones).map((s) => s.floors.map((f) => el('div', { class: 'card' }, floorHead(s.side, f.floor),
       f.zones.map((z) => el('div', { class: 'zin multi' },
         el('div', {}, el('b', {}, zoneName(z)), el('small', {}, `필요 ${z.required}명`)),
@@ -529,16 +529,16 @@
     body.replaceChildren(pickers(o, redraw),
       el('div', { class: 'card sumbar' },
         el('div', {}, el('span', {}, '협정 출근'), el('b', {}, String(cnt.present)), el('small', {}, '명')),
-        el('div', {}, el('span', {}, '배치 입력'), sums.coop, el('small', {}, '명')),
-        el('div', {}, el('span', {}, '남은 인원'), sums.rem, el('small', {}, '명'))),
-      unset ? el('p', { class: 'hint pad' }, `근무조가 지정되지 않은 협정 출근 인원 ${unset}명은 위 숫자에 포함되지 않습니다.`) : null,
+        el('div', {}, el('span', {}, '구역 배치'), el('b', {}, String(cnt.assigned)), el('small', {}, '명')),
+        el('div', {}, el('span', {}, '남은 인원'), el('b', { class: cnt.remaining < 0 ? 'neg' : '' }, String(cnt.remaining)), el('small', {}, '명'))),
+      el('p', { class: 'hint pad' }, '협정인력은 "협정 출퇴근" 화면에서 이름으로 구역에 배치합니다. 여기에서는 지원부서 인원만 입력합니다.'),
       zones.length ? [secs, save] : noZones());
   }
 
   window.APP.ops = { today, addDays, hhmm, dateLabel, basisFor, zoneName, groupZones, sumBy, quotaSum, pct, tone, shiftList, ensureShifts, ctx, zoneSort };
 
   register('input', '인력 입력', ['leader', 'admin', 'master'], inputView, '내 팀 인원을 구역별로 입력');
-  register('place', '협정·지원 배치', ['chief', 'admin', 'master'], placeView, '출근한 협정·지원 인원을 구역에 배치');
+  register('place', '지원 배치', ['chief', 'admin', 'master'], placeView, '지원부서 인원을 구역에 배치');
   register('att', '출근 현황', ['leader', 'chief', 'admin', 'master'], attView, '출근·휴무·연차 등 인원 입력');
   register('status', '구역 현황', ['leader', 'chief', 'admin', 'master'], statusView, '구역별 인원과 상근 대비 % 확인');
 })();

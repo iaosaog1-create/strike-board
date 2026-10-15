@@ -1,208 +1,226 @@
-/* 협정인력 관리 (관리자·최고관리자): 오늘 출근 · 명단 · 가입 신청 · QR 장소 · 협정사 업체 */
+/* 협정 출퇴근 (총괄팀장·관리자): 오늘 출근 확인·구역 배치 · 기간 기록/엑셀/보고서 · 명단 합치기 · QR · 협정사 업체 */
 (() => {
   'use strict';
   const { sb, state, el, seg, busy, toast, register, bizDivs, divName, shortDiv, divTone, printNode } = window.APP;
-  const { today, addDays, hhmm, dateLabel, shiftList, ensureShifts, zoneName, zoneSort } = window.APP.ops;
-  const TABS = [['today', '오늘 출근'], ['workers', '명단'], ['pending', '가입 신청'], ['places', 'QR 장소'], ['vendors', '협정사 업체']];
-  const S = { tab: 'today', date: null, edit: null, pend: null };
-  const t5 = (t) => String(t || '').slice(0, 5);
+  const { today, addDays, hhmm, dateLabel, ensureShifts, zoneName, zoneSort } = window.APP.ops;
+  const X = window.XLSX_LITE;
+  const S = { tab: 'today', date: null, to: null, division: null, zone: '', sel: new Map(), key: '', merge: null };
   const q = async (p) => { const r = await p; if (r.error) throw r.error; return r.data || []; };
-  const errMsg = (e) => (e && e.message && /PIN|숫자|권한|필요|관리자/.test(e.message) ? e.message : '처리하지 못했습니다. 입력값과 권한을 확인하세요');
+  const errMsg = (e) => (e && e.message && /[가-힣]/.test(e.message) && !/violates|constraint/.test(e.message) ? e.message : '처리하지 못했습니다. 입력값과 권한을 확인하세요');
   const qrUrl = (token) => new URL('coop.html?p=' + encodeURIComponent(token), window.location.href).href;
+  const dotDate = (iso) => { const d = new Date(iso + 'T00:00:00Z'); return `${iso.slice(0, 4)}.${iso.slice(5, 7)}.${iso.slice(8, 10)}(${'일월화수목금토'[d.getUTCDay()]})`; };
   function qrImg(url, cell) {
     const qr = window.qrcode(0, 'M'); qr.addData(url); qr.make();
     return el('img', { class: 'qr', src: qr.createDataURL(cell || 6, 2), alt: 'QR 코드' });
   }
+  const isChief = () => state.me.role === 'chief';
+  const TABS = () => [['today', '오늘 출근·배치'], ['range', '기간 기록·엑셀'], ['people', '명단·합치기'], ['places', 'QR'], ...(isChief() ? [] : [['vendors', '협정사 업체']])];
 
   async function coopView(body) {
     await ensureShifts();
     if (!S.date) S.date = today();
+    if (!S.to) S.to = S.date;
+    if (isChief()) S.division = state.me.division_id; else if (!S.division) S.division = (bizDivs()[0] || {}).id;
+    if (!TABS().some(([k]) => k === S.tab)) S.tab = 'today';
     body.replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
-    let vendors, workers, places, pending, att, zones;
+    let vendors, places, zones, log, people = [];
     try {
-      [vendors, workers, places, pending, att, zones] = await Promise.all([
+      [vendors, places, zones] = await Promise.all([
         q(sb.from('coop_vendors').select('id,name,active').order('name')),
-        q(sb.from('coop_workers').select('id,name,work_start,work_end,active,locked,vendor_id,shift').order('name')),
         q(sb.from('coop_places').select('id,name,qr_token,zone_id,division_id,active').order('name')),
-        q(sb.from('coop_pending').select('id,name,status,requested_at').eq('status', 'pending').order('requested_at')),
-        q(sb.from('coop_attendance').select('id,worker_id,place_id,clock_in,clock_out,note').eq('work_date', S.date)),
         q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active'))]);
+      const to = S.tab === 'range' ? S.to : S.date;
+      log = S.tab === 'places' || S.tab === 'vendors' || S.tab === 'people' ? [] : await q(sb.rpc('coop_roster', { p_from: S.date, p_to: to, p_division: S.division }));
+      if (S.tab === 'people') people = await q(sb.rpc('coop_people_list', { p_division: S.division }));
     } catch (e) { body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); return; }
-    // 사업부별 QR 자동 생성: 사업부마다 사용 중인 QR 장소가 없으면 만든다
     const missing = bizDivs().filter((d) => !places.some((p) => p.division_id === d.id && p.active));
-    if (missing.length) {
+    if (missing.length && !isChief()) {
       try {
         await sb.from('coop_places').insert(missing.map((d) => ({ name: `${shortDiv(d.name)} 협정 출퇴근`, division_id: d.id })));
         places = await q(sb.from('coop_places').select('id,name,qr_token,zone_id,division_id,active').order('name'));
       } catch (e) { /* 권한이 없으면 건너뜀 */ }
     }
-    const D = { vendors, workers, places, pending, att, zones };
+    const D = { vendors, places, zones, log, people };
     const redraw = () => coopView(body);
-    const tabs = seg(TABS.map(([k, l]) => [k, k === 'pending' && pending.length ? `${l} ${pending.length}` : l]), S.tab, (v) => { S.tab = v; S.edit = null; S.pend = null; draw(); });
-    const draw = () => {
-      const pane = { today: todayPane, workers: workersPane, pending: pendingPane, places: placesPane, vendors: vendorsPane }[S.tab](D, redraw, draw);
-      body.replaceChildren(tabs, pane);
-    };
-    draw();
+    const key = `${S.date}|${S.division}`;
+    if (S.key !== key) { S.key = key; S.sel = new Map(); log.forEach((r) => S.sel.set(r.log_id, r.zone_id || 0)); }
+    else log.forEach((r) => { if (!S.sel.has(r.log_id)) S.sel.set(r.log_id, r.zone_id || 0); });
+    const tabs = seg(TABS(), S.tab, (v) => { S.tab = v; S.key = ''; redraw(); });
+    const pane = { today: todayPane, range: rangePane, people: peoplePane, places: placesPane, vendors: vendorsPane }[S.tab](D, redraw);
+    body.replaceChildren(tabs, divBar(redraw), pane);
   }
 
-  const vendorName = (D, id) => (D.vendors.find((v) => v.id === id) || {}).name || '';
-  const timeIn = (v, label) => el('input', { type: 'time', value: t5(v), 'aria-label': label });
+  function divBar(redraw) {
+    if (isChief() || S.tab === 'vendors' || S.tab === 'places') return null;
+    return seg(bizDivs().map((d) => [String(d.id), shortDiv(d.name)]), String(S.division), (v) => { S.division = Number(v); S.key = ''; redraw(); });
+  }
+  const zoneLabel = (D, id) => { const z = D.zones.find((x) => x.id === id); return z ? `${z.floor} ${zoneName(z)}` : '미배치'; };
+  const vendorOf = (r) => r.vendor || '-';
 
-  /* ---- 오늘 출근 ---- */
+  function dateBar(redraw, range) {
+    const inp = el('input', { type: 'date', value: S.date, 'aria-label': range ? '시작 날짜' : '날짜' });
+    inp.addEventListener('change', () => { if (inp.value) { S.date = inp.value; if (S.to < S.date || !range) S.to = S.date; redraw(); } });
+    const step = (n) => () => { S.date = addDays(S.date, n); if (!range || S.to < S.date) S.to = S.date; redraw(); };
+    const kids = [el('button', { type: 'button', class: 'btn ghost sm', onclick: step(-1) }, '‹'), inp];
+    if (range) {
+      const to = el('input', { type: 'date', value: S.to, 'aria-label': '끝 날짜' });
+      to.addEventListener('change', () => { if (to.value) { S.to = to.value < S.date ? S.date : to.value; redraw(); } });
+      kids.push(el('span', { class: 'hint' }, '~'), to);
+    }
+    kids.push(el('button', { type: 'button', class: 'btn ghost sm', onclick: step(1) }, '›'),
+      el('button', { type: 'button', class: 'btn ghost sm', onclick: () => { S.date = today(); S.to = S.date; redraw(); } }, '오늘'));
+    return el('div', { class: 'card pick' }, el('div', { class: 'datebar' }, ...kids));
+  }
+
+  /* ---- 오늘 출근·배치 ---- */
   function todayPane(D, redraw) {
-    const inp = el('input', { type: 'date', value: S.date, 'aria-label': '날짜' });
-    inp.addEventListener('change', () => { if (inp.value) { S.date = inp.value; redraw(); } });
-    const step = (n) => () => { S.date = addDays(S.date, n); redraw(); };
-    const bar = el('div', { class: 'card pick' }, el('div', { class: 'datebar' },
-      el('button', { type: 'button', class: 'btn ghost sm', onclick: step(-1) }, '‹'), inp,
-      el('button', { type: 'button', class: 'btn ghost sm', onclick: step(1) }, '›'),
-      el('button', { type: 'button', class: 'btn ghost sm', onclick: () => { S.date = today(); redraw(); } }, '오늘')));
-    const rows = D.att.map((a) => ({ a, w: D.workers.find((x) => x.id === a.worker_id) || {}, p: D.places.find((x) => x.id === a.place_id) || {} }))
-      .sort((x, y) => x.a.clock_in.localeCompare(y.a.clock_in));
-    const working = rows.filter((r) => !r.a.clock_out).length;
-    const active = D.workers.filter((w) => w.active).length;
-    return el('div', {}, bar,
-      el('div', { class: 'card sumbar' },
-        el('div', {}, el('span', {}, '출근'), el('b', {}, String(rows.length)), el('small', {}, '명')),
-        el('div', {}, el('span', {}, '근무 중'), el('b', {}, String(working)), el('small', {}, '명')),
-        el('div', {}, el('span', {}, '미출근'), el('b', {}, String(Math.max(0, active - rows.length))), el('small', {}, '명'))),
-      el('div', { class: 'card' }, el('h2', {}, `${dateLabel(S.date)} 출퇴근 기록`),
-        rows.length ? el('div', { class: 'tblwrap' }, el('table', { class: 'tbl left' },
-          el('thead', {}, el('tr', {}, ...['이름', '업체', '근무조', '장소', '출근', '퇴근'].map((h) => el('th', {}, h)))),
-          el('tbody', {}, rows.map((r) => el('tr', {}, el('th', {}, r.w.name || '-'), el('td', {}, vendorName(D, r.w.vendor_id) || '-'),
-            el('td', {}, r.w.shift || '-'), el('td', {}, r.p.name || '-'), el('td', {}, hhmm(r.a.clock_in)), el('td', {}, r.a.clock_out ? hhmm(r.a.clock_out) : '근무 중'))))))
-          : el('p', { class: 'empty' }, '이 날짜의 출근 기록이 없습니다')));
-  }
-
-  /* ---- 명단 ---- */
-  function workersPane(D, redraw, draw) {
-    const w = S.edit || { id: null, name: '', work_start: '07:00', work_end: '16:30', active: true, vendor_id: null, shift: null };
-    const f = { shift: w.shift || '', active: w.active };
-    const nameIn = el('input', { type: 'text', maxlength: '20', value: w.name, 'aria-label': '이름' });
-    const pinIn = el('input', { type: 'text', inputmode: 'numeric', maxlength: '4', autocomplete: 'off', placeholder: w.id ? '비워 두면 그대로' : '숫자 4자리', 'aria-label': 'PIN' });
-    const sIn = timeIn(w.work_start, '출근 시각'), eIn = timeIn(w.work_end, '퇴근 시각');
-    const vSel = el('select', { 'aria-label': '협정사 업체' }, el('option', { value: '' }, '선택 안 함'),
-      ...D.vendors.filter((v) => v.active || v.id === w.vendor_id).map((v) => el('option', { value: v.id }, v.name)));
-    vSel.value = w.vendor_id ? String(w.vendor_id) : '';
-    const save = el('button', { class: 'btn', type: 'button' }, w.id ? '수정 저장' : '명단에 추가');
+    const rows = D.log;
+    const zs = D.zones.filter((z) => z.division_id === S.division && z.active).sort(zoneSort);
+    const zSel = el('select', { 'aria-label': '배치할 구역' }, el('option', { value: '' }, '구역을 고르세요'),
+      ...zs.map((z) => el('option', { value: z.id }, `${z.side} ${z.floor} · ${zoneName(z)}`)));
+    zSel.value = S.zone; zSel.addEventListener('change', () => { S.zone = zSel.value; });
+    const waitIn = rows.filter((r) => !r.in_ok).length;
+    const waitOut = rows.filter((r) => r.out_at && !r.out_ok).length;
+    const unplaced = rows.filter((r) => !S.sel.get(r.log_id)).length;
+    const noOut = rows.filter((r) => !r.out_at).length;
+    const drawSelf = () => redraw();
+    const tap = (r) => () => {
+      const cur = S.sel.get(r.log_id) || 0; const z = S.zone ? Number(S.zone) : 0;
+      if (!z && !cur) return toast('먼저 위에서 구역을 고르세요', 'err');
+      if (!cur) S.sel.set(r.log_id, z);
+      else if (cur !== z && z) { S.sel.set(r.log_id, z); toast(`${r.name}님 구역을 바꿨습니다`); }
+      else S.sel.set(r.log_id, 0);
+      drawSelf();
+    };
+    const save = el('button', { class: 'btn', type: 'button' }, '구역 배치 저장');
     save.addEventListener('click', busy(save, async () => {
-      const name = nameIn.value.trim(), pin = pinIn.value.trim();
-      if (name.length < 2) return toast('이름을 입력하세요', 'err');
-      if (pin && !/^\d{4}$/.test(pin)) return toast('PIN은 숫자 4자리입니다', 'err');
-      if (!w.id && !pin) return toast('새로 등록할 때는 PIN이 필요합니다', 'err');
-      if (!sIn.value || !eIn.value) return toast('출근·퇴근 시각을 입력하세요', 'err');
-      const { error } = await sb.rpc('coop_save_worker', { p_id: w.id, p_name: name, p_pin: pin || null, p_start: sIn.value, p_end: eIn.value,
-        p_active: f.active, p_vendor: vSel.value ? Number(vSel.value) : null, p_shift: f.shift || null });
+      const { error } = await sb.rpc('coop_assign', { p_date: S.date, p_division: S.division, p_rows: rows.map((r) => ({ log_id: r.log_id, zone_id: S.sel.get(r.log_id) || null })) });
       if (error) return toast(errMsg(error), 'err');
-      toast(w.id ? '수정했습니다' : '명단에 추가했습니다'); S.edit = null; redraw();
+      toast('구역 배치를 저장했습니다. 구역별 인원이 현황에 반영됩니다'); S.key = ''; redraw();
     }));
-    const form = el('div', { class: 'card' }, el('h2', {}, w.id ? `${w.name} 수정` : '협정인력 추가'),
-      el('label', { class: 'f' }, el('span', {}, '이름'), nameIn),
-      el('label', { class: 'f' }, el('span', {}, 'PIN (본인이 출퇴근 때 입력)'), pinIn),
-      el('div', { class: 'f' }, el('span', { class: 'hint' }, '근무조'), seg([['', '미지정'], ...shiftList().map((s) => [s, s])], f.shift, (v) => { f.shift = v; })),
-      el('div', { class: 'two' }, el('label', { class: 'f' }, el('span', {}, '출근 시각'), sIn), el('label', { class: 'f' }, el('span', {}, '퇴근 시각'), eIn)),
-      el('label', { class: 'f' }, el('span', {}, '협정사 업체'), vSel),
-      w.id ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '상태'), seg([['y', '사용'], ['n', '중지']], f.active ? 'y' : 'n', (v) => { f.active = v === 'y'; })) : null,
-      save, w.id ? el('button', { class: 'btn ghost', type: 'button', onclick: () => { S.edit = null; draw(); } }, '취소') : null);
-    const list = el('div', { class: 'card' }, el('h2', {}, `협정인력 ${D.workers.length}명`),
-      D.workers.length ? D.workers.map((x) => {
-        const unlock = x.locked ? el('button', { class: 'btn ghost sm', type: 'button' }, 'PIN 잠금 해제') : null;
-        if (unlock) unlock.addEventListener('click', busy(unlock, async () => {
-          const { error } = await sb.rpc('coop_unlock', { p_id: x.id });
-          if (error) return toast(errMsg(error), 'err'); toast('잠금을 풀었습니다'); redraw();
-        }));
-        return el('div', { class: 'zrow' + (x.active ? '' : ' off') },
-          el('div', {}, el('b', {}, x.name), el('small', {}, [vendorName(D, x.vendor_id), x.shift, `${t5(x.work_start)}~${t5(x.work_end)}`].filter(Boolean).join(' · ')),
-            x.locked ? el('small', { class: 'warn' }, 'PIN 잠김') : null, x.active ? null : el('small', {}, '사용 중지')),
-          el('div', { class: 'zact' }, unlock, el('button', { class: 'btn ghost sm', type: 'button', onclick: () => { S.edit = x; draw(); } }, '수정')));
-      }) : el('p', { class: 'empty' }, '아직 등록된 협정인력이 없습니다'));
-    return el('div', {}, form, list);
-  }
-
-  /* ---- 가입 신청 ---- */
-  function pendingPane(D, redraw, draw) {
-    const p = S.pend && D.pending.find((x) => x.id === S.pend.id);
-    const list = el('div', { class: 'card' }, el('h2', {}, `승인 대기 ${D.pending.length}명`),
-      D.pending.length ? D.pending.map((x) => el('button', { type: 'button', class: 'list-item' + (p && p.id === x.id ? ' sel' : ''), onclick: () => { S.pend = x; draw(); } },
-        el('b', {}, x.name), el('span', { class: 'badge wait' }, '대기'), el('small', {}, hhmm(x.requested_at) + ' 신청'), el('span', {})))
-        : el('p', { class: 'empty' }, '대기 중인 신청이 없습니다'));
-    if (!p) return el('div', {}, list);
-    const f = { shift: '' };
-    const sIn = timeIn('07:00', '출근 시각'), eIn = timeIn('16:30', '퇴근 시각');
-    const vSel = el('select', { 'aria-label': '협정사 업체' }, el('option', { value: '' }, '선택 안 함'), ...D.vendors.filter((v) => v.active).map((v) => el('option', { value: v.id }, v.name)));
-    const run = (approve) => async () => {
-      if (approve && (!sIn.value || !eIn.value)) return toast('출근·퇴근 시각을 입력하세요', 'err');
-      const { error } = await sb.rpc('coop_review_join', { p_id: p.id, p_approve: approve, p_start: approve ? sIn.value : null, p_end: approve ? eIn.value : null,
-        p_vendor: vSel.value ? Number(vSel.value) : null, p_shift: f.shift || null });
+    const confirm = (ids, kind, msg) => async () => {
+      if (!ids.length) return toast('확인할 항목이 없습니다');
+      const { error } = await sb.rpc('coop_confirm', { p_ids: ids, p_kind: kind });
       if (error) return toast(errMsg(error), 'err');
-      toast(approve ? `${p.name}님을 명단에 등록했습니다` : '반려했습니다'); S.pend = null; redraw();
+      toast(msg); redraw();
     };
-    const ok = el('button', { class: 'btn', type: 'button' }, '승인하고 명단에 등록'), no = el('button', { class: 'btn danger', type: 'button' }, '반려');
-    ok.addEventListener('click', busy(ok, run(true))); no.addEventListener('click', busy(no, run(false)));
-    return el('div', {}, list, el('div', { class: 'card' }, el('h2', {}, `${p.name} 승인`),
-      el('p', { class: 'hint' }, 'PIN은 본인이 신청할 때 정한 번호가 그대로 사용됩니다.'),
-      el('div', { class: 'f' }, el('span', { class: 'hint' }, '근무조'), seg([['', '미지정'], ...shiftList().map((s) => [s, s])], f.shift, (v) => { f.shift = v; })),
-      el('div', { class: 'two' }, el('label', { class: 'f' }, el('span', {}, '출근 시각'), sIn), el('label', { class: 'f' }, el('span', {}, '퇴근 시각'), eIn)),
-      el('label', { class: 'f' }, el('span', {}, '협정사 업체'), vSel), el('div', { class: 'actions' }, ok, no)));
+    const sessions = ['오전', '오후'].map((ses) => {
+      const rs = rows.filter((r) => r.session === ses);
+      if (!rs.length) return null;
+      const cards = rs.map((r) => {
+        const z = S.sel.get(r.log_id) || 0;
+        return el('button', { type: 'button', class: 'pp' + (z ? ' on' : ''), 'aria-pressed': String(!!z), onclick: tap(r) },
+          el('b', {}, r.name), el('small', {}, z ? `✔ ${zoneLabel(D, z)}` : vendorOf(r)));
+      });
+      const confirmBtn = (r, kind) => {
+        const ok = kind === 'in' ? r.in_ok : r.out_ok;
+        if (kind === 'out' && !r.out_at) return el('span', { class: 'cp-wait' }, '근무 중');
+        if (ok) return el('span', { class: 'cp-ok' }, `✓ ${(kind === 'in' ? r.in_ok_by : r.out_ok_by) || '확인'}`);
+        const b = el('button', { class: 'btn ghost sm', type: 'button' }, '확인'); b.addEventListener('click', busy(b, confirm([r.log_id], kind, '확인했습니다'))); return b;
+      };
+      const tbl = el('div', { class: 'tblwrap' }, el('table', { class: 'tbl left' },
+        el('thead', {}, el('tr', {}, ...['이름', '협정사', '구역', '출근·서명', '확인', '퇴근·서명', '확인'].map((h) => el('th', {}, h)))),
+        el('tbody', {}, rs.map((r) => el('tr', {}, el('th', {}, r.name), el('td', {}, vendorOf(r)), el('td', {}, zoneLabel(D, S.sel.get(r.log_id) || 0)),
+          el('td', {}, `${hhmm(r.in_at)} `, el('span', { class: 'cp-sign' }, r.in_sign)), el('td', {}, confirmBtn(r, 'in')),
+          el('td', {}, r.out_at ? [`${hhmm(r.out_at)} `, el('span', { class: 'cp-sign' }, r.out_sign || '')] : '-'), el('td', {}, confirmBtn(r, 'out')))))));
+      const allOk = el('button', { class: 'btn ghost sm', type: 'button' }, `${ses} 전체 확인`);
+      allOk.addEventListener('click', busy(allOk, confirm(rs.map((r) => r.log_id), 'both', `${ses} 출퇴근을 모두 확인했습니다`)));
+      return el('div', { class: 'card' }, el('h2', {}, `${ses}조 · 출근 ${rs.length}명`), el('div', { class: 'ppgrid' }, cards), tbl, el('div', { class: 'actions' }, allOk));
+    });
+    return el('div', {}, dateBar(redraw),
+      el('div', { class: 'ck-tiles' }, ...[['출근', rows.length, 'ok'], ['미배치', unplaced, unplaced ? 'mid' : 'ok'], ['확인 대기', waitIn + waitOut, waitIn + waitOut ? 'mid' : 'ok'], ['퇴근 전', noOut, '']]
+        .map(([l, v, c]) => el('div', { class: 'ck-tile ' + c }, el('b', {}, String(v)), el('span', {}, l)))),
+      rows.length ? el('div', { class: 'card' }, el('h2', {}, `${dateLabel(S.date)} 구역 배치`),
+        el('label', { class: 'f' }, el('span', {}, '① 배치할 구역'), zSel),
+        el('p', { class: 'hint' }, '② 아래 이름을 누르면 선택한 구역에 배치됩니다. 다시 누르면 취소, 다른 구역을 고르고 누르면 구역이 바뀝니다.'),
+        el('div', { class: 'actions' }, save))
+        : el('div', { class: 'card' }, el('p', { class: 'empty' }, '이 날짜의 협정 출근 기록이 없습니다. 협정인력이 QR로 출근하면 이름이 바로 나타납니다')),
+      ...sessions);
   }
 
-  /* ---- QR 장소 ---- */
+  /* ---- 기간 기록 · 엑셀 · 보고서 ---- */
+  const excelSheets = (rows, divLabel, zmapFn) => {
+    const H = (v) => ({ v, s: 'hdr' });
+    const base = (r) => [dotDate(r.work_date), r.session, r.name, r.vendor || '-', zmapFn(r.division_id, r.zone_id)];
+    const detail = { name: '출퇴근 기록', widths: [16, 8, 12, 16, 28, 10, 12, 12, 10, 12, 12], rows: [['날짜', '구분', '이름', '협정사', '배치 구역', '출근 시각', '출근 서명', '출근 확인', '퇴근 시각', '퇴근 서명', '퇴근 확인'].map(H),
+      ...rows.map((r) => [...base(r), hhmm(r.in_at), r.in_sign, r.in_ok ? r.in_ok_by || '확인' : '미확인', r.out_at ? hhmm(r.out_at) : '퇴근 기록 없음', r.out_sign || '', r.out_at ? (r.out_ok ? r.out_ok_by || '확인' : '미확인') : ''])] };
+    const days = [...new Set(rows.map((r) => r.work_date))].sort();
+    const sum = { name: '일자별 요약', widths: [16, 10, 10, 10, 12, 12], rows: [['날짜', '오전 출근', '오후 출근', '합계', '퇴근 기록 없음', '확인 대기'].map(H),
+      ...days.map((d) => { const rs = rows.filter((r) => r.work_date === d); return [dotDate(d), rs.filter((r) => r.session === '오전').length, rs.filter((r) => r.session === '오후').length, rs.length, rs.filter((r) => !r.out_at).length, rs.filter((r) => !r.in_ok || (r.out_at && !r.out_ok)).length]; })] };
+    return [detail, sum];
+  };
+  function rangePane(D, redraw) {
+    const rows = D.log;
+    const zmapFn = (div, id) => { const z = D.zones.find((x) => x.id === id); return z ? `${z.side} ${z.floor} ${zoneName(z)}` : '구역 미배치'; };
+    const dl = el('button', { class: 'btn', type: 'button' }, '엑셀 다운로드');
+    dl.addEventListener('click', () => { if (!rows.length) return toast('내려받을 기록이 없습니다'); X.download(`협정출퇴근_${shortDiv(divName(S.division))}_${S.date}${S.to !== S.date ? '_' + S.to : ''}.xlsx`, X.write(excelSheets(rows, '', zmapFn)), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); });
+    const all = el('button', { class: 'btn ghost', type: 'button' }, '엑셀 (전체 사업부)');
+    all.addEventListener('click', busy(all, async () => {
+      const sheets = [];
+      for (const d of bizDivs()) {
+        const rs = await q(sb.rpc('coop_roster', { p_from: S.date, p_to: S.to, p_division: d.id }));
+        const sh = excelSheets(rs, '', zmapFn); sh[0].name = `${shortDiv(d.name)} 기록`; sh[1].name = `${shortDiv(d.name)} 요약`; sheets.push(...sh);
+      }
+      X.download(`협정출퇴근_전체_${S.date}${S.to !== S.date ? '_' + S.to : ''}.xlsx`, X.write(sheets), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }));
+    const pr = el('button', { class: 'btn ghost', type: 'button' }, '보고서 인쇄·PDF');
+    pr.addEventListener('click', () => {
+      if (!rows.length) return toast('인쇄할 기록이 없습니다');
+      const th = (...h) => el('thead', {}, el('tr', {}, ...h.map((x) => el('th', {}, x))));
+      printNode(el('div', { class: 'rpt' },
+        el('div', { class: 'rhead' }, el('h1', {}, '협정인력 출퇴근 확인서'), el('p', {}, `${divName(S.division)} · ${dotDate(S.date)}${S.to !== S.date ? ' ~ ' + dotDate(S.to) : ''}`), el('small', {}, `총 ${rows.length}건`)),
+        el('section', { class: 'grow' }, el('table', { class: 'rtbl' }, th('날짜', '구분', '이름', '협정사', '배치 구역', '출근', '서명', '퇴근', '서명', '확인'),
+          el('tbody', {}, rows.map((r) => el('tr', {}, el('td', {}, dotDate(r.work_date).slice(5)), el('td', {}, r.session), el('th', {}, r.name), el('td', {}, vendorOf(r)), el('td', {}, zmapFn(r.division_id, r.zone_id)),
+            el('td', {}, hhmm(r.in_at)), el('td', {}, r.in_sign), el('td', {}, r.out_at ? hhmm(r.out_at) : '-'), el('td', {}, r.out_sign || ''), el('td', {}, r.in_ok && (!r.out_at || r.out_ok) ? (r.in_ok_by || '확인') : '미확인')))))),
+        el('div', { class: 'rfoot' }, '인천공항운영서비스')));
+    });
+    const list = el('div', { class: 'card' }, el('h2', {}, `${shortDiv(divName(S.division))} 기록 ${rows.length}건`),
+      rows.length ? el('div', { class: 'tblwrap' }, el('table', { class: 'tbl left' },
+        el('thead', {}, el('tr', {}, ...['날짜', '구분', '이름', '협정사', '구역', '출근', '퇴근', '확인'].map((h) => el('th', {}, h)))),
+        el('tbody', {}, rows.map((r) => el('tr', {}, el('td', {}, dotDate(r.work_date).slice(5)), el('td', {}, r.session), el('th', {}, r.name), el('td', {}, vendorOf(r)), el('td', {}, zmapFn(r.division_id, r.zone_id)),
+          el('td', {}, hhmm(r.in_at)), el('td', {}, r.out_at ? hhmm(r.out_at) : '-'), el('td', {}, r.in_ok && (!r.out_at || r.out_ok) ? el('span', { class: 'cp-ok' }, '✓') : el('span', { class: 'cp-wait' }, '대기')))))))
+        : el('p', { class: 'empty' }, '기간 안에 기록이 없습니다'));
+    return el('div', {}, dateBar(redraw, true), el('div', { class: 'card' }, el('div', { class: 'actions' }, dl, pr, isChief() ? null : all)), list);
+  }
+
+  /* ---- 명단 · 합치기 (이름 오타로 둘로 나뉜 경우) ---- */
+  function peoplePane(D, redraw) {
+    const ps = D.people;
+    const sel = S.merge && ps.find((p) => p.person_id === S.merge);
+    const list = el('div', { class: 'card' }, el('h2', {}, `협정인력 ${ps.length}명`),
+      el('p', { class: 'hint' }, '같은 사람이 이름 철자 등으로 둘로 나뉘었다면, 합칠 사람을 눌러 하나로 합칩니다.'),
+      ps.length ? ps.map((p) => el('div', { class: 'zrow' }, el('div', {}, el('b', {}, p.name), el('small', {}, `${p.vendor || '협정사 없음'} · 출근 ${p.days}회 · 최근 ${p.last_date}`)),
+        el('div', { class: 'zact' }, el('button', { class: 'btn ghost sm', type: 'button', onclick: () => { S.merge = p.person_id; redraw(); } }, '합치기')))) : el('p', { class: 'empty' }, '아직 출근한 협정인력이 없습니다'));
+    if (!sel) return el('div', {}, list);
+    const tgt = el('select', { 'aria-label': '합칠 대상' }, ...ps.filter((p) => p.person_id !== sel.person_id).map((p) => el('option', { value: p.person_id }, `${p.name} · ${p.vendor || '협정사 없음'}`)));
+    const go = el('button', { class: 'btn danger', type: 'button' }, '합치기');
+    go.addEventListener('click', busy(go, async () => {
+      if (!tgt.value) return toast('합칠 대상을 고르세요', 'err');
+      if (!window.confirm(`${sel.name}님의 기록을 선택한 사람으로 옮기고, ${sel.name}님은 명단에서 지웁니다. 계속할까요?`)) return;
+      const { error } = await sb.rpc('coop_merge', { p_from: sel.person_id, p_to: Number(tgt.value), p_division: S.division });
+      if (error) return toast(errMsg(error), 'err');
+      toast('합쳤습니다'); S.merge = null; redraw();
+    }));
+    return el('div', {}, el('div', { class: 'card' }, el('h2', {}, `${sel.name} 기록을 어디로 합칠까요?`), el('label', { class: 'f' }, el('span', {}, '합칠 대상 (남는 사람)'), tgt),
+      el('div', { class: 'actions' }, go, el('button', { class: 'btn ghost', type: 'button', onclick: () => { S.merge = null; redraw(); } }, '취소'))), list);
+  }
+
+  /* ---- QR ---- */
   function placesPane(D, redraw) {
-    const f = { div: String((bizDivs()[0] || {}).id || '') };
-    const nameIn = el('input', { type: 'text', maxlength: '30', placeholder: '예: T1 3층 동편 휴게실', 'aria-label': '장소 이름' });
-    const zSel = el('select', { 'aria-label': '연결할 구역' });
-    const drawZ = () => {
-      const zs = D.zones.filter((z) => String(z.division_id) === f.div && z.active).sort(zoneSort);
-      zSel.replaceChildren(el('option', { value: '' }, '연결 안 함'), ...zs.map((z) => el('option', { value: z.id }, `${z.side} · ${z.floor} · ${zoneName(z)}`)));
-    };
-    drawZ();
-    const dSel = el('select', { 'aria-label': '사업부' }, ...bizDivs().map((d) => el('option', { value: d.id }, d.name)));
-    dSel.addEventListener('change', () => { f.div = dSel.value; drawZ(); });
-    const add = el('button', { class: 'btn', type: 'button' }, '장소 추가');
-    add.addEventListener('click', busy(add, async () => {
-      const name = nameIn.value.trim();
-      if (!name) return toast('장소 이름을 입력하세요', 'err');
-      const { error } = await sb.from('coop_places').insert({ name, division_id: Number(f.div), zone_id: zSel.value ? Number(zSel.value) : null });
-      if (error) return toast('추가하지 못했습니다. 권한을 확인하세요', 'err');
-      toast('장소를 추가했습니다'); redraw();
-    }));
-    const form = el('div', { class: 'card' }, el('h2', {}, 'QR 장소 추가'),
-      el('p', { class: 'hint' }, '협정인력이 출퇴근할 때 스캔하는 QR 코드를 만듭니다. 사업부를 지정해야 총괄팀장이 배치할 수 있습니다.'),
-      el('label', { class: 'f' }, el('span', {}, '장소 이름'), nameIn), el('label', { class: 'f' }, el('span', {}, '사업부'), dSel),
-      el('label', { class: 'f' }, el('span', {}, '연결할 구역 (선택)'), zSel), add);
-    const list = el('div', { class: 'card' }, el('h2', {}, `QR 장소 ${D.places.length}곳`),
-      D.places.length ? el('div', { class: 'qrgrid' }, D.places.map((pl) => {
-        const url = qrUrl(pl.qr_token);
-        const poster = el('button', { class: 'btn ghost sm', type: 'button' }, '인쇄');
-        poster.addEventListener('click', () => printNode(el('div', { class: 'poster' },
-          el('h1', {}, '협정인력 출퇴근'), el('h2', {}, pl.name), qrImg(url, 14),
-          el('p', {}, '휴대폰 카메라로 QR을 스캔하세요'), el('ol', {}, el('li', {}, '이름을 선택'), el('li', {}, 'PIN 4자리 입력'), el('li', {}, '출근 또는 퇴근 버튼')))));
-        const copy = el('button', { class: 'btn ghost sm', type: 'button' }, '링크 복사');
-        copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); toast('링크를 복사했습니다'); } catch (e) { toast(url); } });
-        const tog = el('button', { class: 'btn ghost sm', type: 'button' }, pl.active ? '사용 중지' : '다시 사용');
-        tog.addEventListener('click', busy(tog, async () => {
-          const { error } = await sb.from('coop_places').update({ active: !pl.active }).eq('id', pl.id);
-          if (error) return toast('처리하지 못했습니다', 'err'); redraw();
-        }));
-        const z = D.zones.find((x) => x.id === pl.zone_id);
-        return el('div', { class: 'qrcell' + (pl.active ? '' : ' off') }, qrImg(url, 5),
-          el('b', {}, pl.name), el('small', {}, [shortDiv(divName(pl.division_id)), z ? `${z.floor} ${zoneName(z)}` : ''].filter(Boolean).join(' · ') || '사업부 미지정'),
-          el('div', { class: 'zact wrap' }, poster, copy, tog));
-      })) : el('p', { class: 'empty' }, '아직 등록된 장소가 없습니다'));
-    // 사업부별 대표 QR (자동 생성) – 인쇄만 하면 됨
-    const main = bizDivs().map((d) => ({ d, pl: D.places.find((p) => p.division_id === d.id && p.active && !p.zone_id) || D.places.find((p) => p.division_id === d.id && p.active) })).filter((x) => x.pl);
-    const mainCard = el('div', { class: 'card' }, el('h2', {}, '사업부별 출퇴근 QR'),
-      el('p', { class: 'hint' }, '자동으로 만들어진 QR입니다. 인쇄해서 협정인력이 보이는 곳에 붙이면 됩니다.'),
+    const main = bizDivs().filter((d) => !isChief() || d.id === state.me.division_id)
+      .map((d) => ({ d, pl: D.places.find((p) => p.division_id === d.id && p.active && !p.zone_id) || D.places.find((p) => p.division_id === d.id && p.active) })).filter((x) => x.pl);
+    const steps = ['이름 · 협정사 입력', '전화번호 뒤 6자리 입력 (***-**00-0000 의 00-0000)', '출근 또는 퇴근 버튼'];
+    return el('div', {}, el('div', { class: 'card' }, el('h2', {}, '사업부별 출퇴근 QR'),
+      el('p', { class: 'hint' }, '출근할 때와 퇴근할 때 같은 QR을 찍습니다. 인쇄해서 협정인력이 보이는 곳에 붙이세요.'),
       main.length ? el('div', { class: 'qrgrid big' }, main.map(({ d, pl }) => {
         const url = qrUrl(pl.qr_token);
         const pr = el('button', { class: 'btn sm', type: 'button' }, '인쇄');
-        pr.addEventListener('click', () => printNode(el('div', { class: 'poster' },
-          el('h1', {}, '협정인력 출퇴근'), el('h2', {}, d.name), qrImg(url, 14),
-          el('p', {}, '휴대폰 카메라로 QR을 스캔하세요'), el('ol', {}, el('li', {}, '이름을 선택'), el('li', {}, 'PIN 4자리 입력'), el('li', {}, '출근 또는 퇴근 버튼')))));
-        return el('div', { class: 'qrcell ' + divTone(d.id) }, el('b', {}, shortDiv(d.name)), qrImg(url, 6), el('small', {}, pl.name), pr);
-      })) : el('p', { class: 'empty' }, 'QR을 만들지 못했습니다. 관리자 권한을 확인하세요'));
-    return el('div', {}, mainCard, form, list);
+        pr.addEventListener('click', () => printNode(el('div', { class: 'poster' }, el('h1', {}, '협정인력 출퇴근'), el('h2', {}, d.name), qrImg(url, 14),
+          el('p', {}, '출근할 때, 퇴근할 때 휴대폰 카메라로 QR을 스캔하세요'), el('ol', {}, steps.map((s) => el('li', {}, s))))));
+        const copy = el('button', { class: 'btn ghost sm', type: 'button' }, '링크 복사');
+        copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); toast('링크를 복사했습니다'); } catch (e) { toast(url); } });
+        return el('div', { class: 'qrcell ' + divTone(d.id) }, el('b', {}, shortDiv(d.name)), qrImg(url, 6), el('small', {}, pl.name), el('div', { class: 'zact wrap' }, pr, copy));
+      })) : el('p', { class: 'empty' }, 'QR을 만들지 못했습니다. 관리자 권한을 확인하세요')));
   }
 
   /* ---- 협정사 업체 ---- */
@@ -216,7 +234,7 @@
       if (error) return toast(error.code === '23505' ? '이미 있는 업체입니다' : '추가하지 못했습니다. 권한을 확인하세요', 'err');
       toast('업체를 추가했습니다'); redraw();
     }));
-    return el('div', {}, el('div', { class: 'card' }, el('h2', {}, '협정사 업체 추가'), el('label', { class: 'f' }, el('span', {}, '업체 이름'), nameIn), add),
+    return el('div', {}, el('div', { class: 'card' }, el('h2', {}, '협정사 업체 추가'), el('p', { class: 'hint' }, '업체가 등록되면 출퇴근 화면에서 협정사를 선택해야 합니다.'), el('label', { class: 'f' }, el('span', {}, '업체 이름'), nameIn), add),
       el('div', { class: 'card' }, el('h2', {}, `협정사 업체 ${D.vendors.length}곳`),
         D.vendors.length ? D.vendors.map((v) => {
           const tog = el('button', { class: 'btn ghost sm', type: 'button' }, v.active ? '사용 중지' : '다시 사용');
@@ -228,5 +246,5 @@
         }) : el('p', { class: 'empty' }, '등록된 업체가 없습니다. 위에서 추가하세요')));
   }
 
-  register('coop', '협정인력 관리', ['admin', 'master'], coopView, '명단·PIN·QR 장소·협정사 업체 관리');
+  register('coop', '협정 출퇴근', ['chief', 'admin', 'master'], coopView, '협정인력 출퇴근 확인·구역 배치·엑셀');
 })();

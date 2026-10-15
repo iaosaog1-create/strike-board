@@ -419,3 +419,16 @@ input:focus,select:focus,button:focus-visible{outline:3px solid #6FA0EC;outline-
 .ck-chip.gm{box-shadow:inset 4px 0 0 #5B8DEF}.ck-chip.gf{box-shadow:inset 4px 0 0 #E9729B}
 .ck-gline{margin:8px 2px 0;font-weight:800;font-size:15px;color:var(--ink)}
 .rs.gn{font-weight:800}
+/* ---- 협정 출퇴근(전화번호 6자리 · 서명) ---- */
+.phonebox{display:flex;align-items:center;gap:8px;border:1px solid var(--field-line);border-radius:14px;background:#fff;padding:0 12px;min-height:56px}
+.phonebox .mask{font-size:22px;font-weight:800;letter-spacing:2px;color:#9aa1ad;white-space:nowrap}
+.phonebox input{border:0;outline:0;background:transparent;font-size:24px;font-weight:800;letter-spacing:3px;min-width:0;flex:1;padding:0;min-height:52px;box-shadow:none}
+.hint.ex{display:block;margin-top:6px;line-height:1.4}
+.signbox{margin:10px auto 6px;max-width:300px;width:100%;border:2px dashed #C9CED6;border-radius:16px;padding:10px 14px;background:#fff;text-align:left}
+.signbox small{display:block;font-size:13px;color:var(--sub);font-weight:700}
+.signbox b{display:block;font-size:30px;font-weight:700;font-style:italic;letter-spacing:2px;padding:4px 0}
+.cp-sign{font-style:italic;font-weight:700}
+.cp-ok{color:#1d7a5a;font-weight:800}
+.cp-wait{color:#B4423C;font-weight:700}
+.ck-tiles{margin-top:10px;margin-bottom:10px}.tbl.left thead th{text-align:left}
+.seg button{flex:1 0 auto}
