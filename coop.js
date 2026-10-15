@@ -17,9 +17,13 @@
     for (const kid of kids.flat()) { if (kid == null || kid === false) continue; n.append(kid.nodeType ? kid : document.createTextNode(String(kid))); }
     return n;
   };
-  const mount = (...nodes) => { root.replaceChildren(el('header', { class: 'top' }, el('h1', {}, 'IAOS 비정상상황')), ...nodes); window.scrollTo(0, 0); };
+  const mount = (...nodes) => { root.replaceChildren(el('header', { class: 'top' }, el('img', { class: 'lg', src: 'icon-192.png', alt: '' }), el('div', { class: 'tt' }, el('h1', {}, 'IAOS 비정상상황'), el('small', {}, '협정인력 출퇴근'))), ...nodes); window.scrollTo(0, 0); };
   const hhmm = (ts) => new Date(ts).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false });
   const busy = (btn, fn) => async (ev) => { ev && ev.preventDefault(); if (btn.disabled) return; btn.disabled = true; try { await fn(); } finally { btn.disabled = false; } };
+  const nowDate = () => new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', weekday: 'short' });
+  const clockEl = el('b', {}, '');
+  const tick = () => { clockEl.textContent = hhmm(Date.now()); };
+  tick(); setInterval(tick, 20000);
   const state = { place: null, workers: [], worker: null, filter: '' };
 
   const CLOCK_ERR = {
@@ -77,13 +81,13 @@
       if (!data.ok) return showErr(data.code === 'bad_pin' ? `PIN이 맞지 않습니다. ${data.remaining}번 더 틀리면 잠깁니다` : (CLOCK_ERR[data.code] || '처리하지 못했습니다'));
       done(data);
     };
-    const inBtn = el('button', { class: 'btn big', type: 'button' }, '출근');
+    const inBtn = el('button', { class: 'btn big in', type: 'button' }, '출근');
     const outBtn = el('button', { class: 'btn big out', type: 'button' }, '퇴근');
     inBtn.addEventListener('click', busy(inBtn, act('in'))); outBtn.addEventListener('click', busy(outBtn, act('out')));
     drawList();
     mount(el('main', { class: 'wrap' },
-      el('h2', { class: 'title' }, '출퇴근'),
-      el('p', { class: 'place' }, state.place.name),
+      el('div', { class: 'cclock' }, el('small', {}, nowDate()), clockEl),
+      state.place.name ? el('p', { class: 'place' }, state.place.name) : null,
       el('div', { class: 'card' },
         el('div', { class: 'f' }, el('span', { class: 'hint' }, '1. 내 이름을 누르세요'), search), list,
         el('div', { class: 'f' }, el('span', { class: 'hint' }, '2. PIN 4자리'), pin),
@@ -126,7 +130,7 @@
         el('h2', { class: 'title' }, '신청되었습니다'), el('p', { class: 'lead' }, '관리자가 승인하면 출퇴근할 수 있습니다'),
         el('button', { class: 'btn ghost', type: 'button', onclick: start }, '처음으로')));
     }));
-    mount(el('main', { class: 'wrap' }, el('h2', { class: 'title' }, '가입 신청'), el('p', { class: 'place' }, state.place.name), el('div', { class: 'card' }, form),
+    mount(el('main', { class: 'wrap' }, el('h2', { class: 'title' }, '가입 신청'), state.place.name ? el('p', { class: 'place' }, state.place.name) : null, el('div', { class: 'card' }, form),
       el('button', { class: 'linkbtn', type: 'button', onclick: main }, '← 돌아가기')));
   }
 

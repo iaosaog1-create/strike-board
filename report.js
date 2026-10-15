@@ -49,11 +49,11 @@
   /* 화면·인쇄용 */
   function reportNode(m) {
     const th = (...h) => el('thead', {}, el('tr', {}, ...h.map((x) => el('th', {}, x))));
-    const sumTbl = el('table', { class: 'rtbl' }, th('구분', '환경미화원', '행정인력', '협정사', '합계', '일일근무정원', '상근 대비'),
+    const sumTbl = el('table', { class: 'rtbl' }, th('구분', '현장투입', '행정인력', '협정사', '합계', '일일근무정원', '상근 대비'),
       el('tbody', {}, [...m.sumRows, m.tot].map((r, i, a) => el('tr', { class: i === a.length - 1 ? 'sum' : '' },
         el('th', { class: r.tone || '' }, r.name), el('td', {}, r.biz), el('td', {}, r.sup), el('td', {}, r.coop), el('td', { class: 'b' }, r.total), el('td', {}, r.quota || '-'), el('td', { class: 'b' }, pctTxt(r.pct))))));
     let prev = '';
-    const zTbl = el('table', { class: 'rtbl zr' }, th('사업부', '구분·층', '구역', '필요', '환경미화원', '행정', '협정', '합계', '달성'),
+    const zTbl = el('table', { class: 'rtbl zr' }, th('사업부', '구분·층', '구역', '필요', '현장투입', '행정', '협정', '합계', '달성'),
       el('tbody', {}, m.zoneRows.length ? m.zoneRows.map((r) => {
         const head = `${r.div}|${r.side} ${r.floor}`; const first = head !== prev; prev = head;
         return el('tr', {}, el('th', {}, first ? r.div : ''), el('td', { class: 'l' }, first ? `${r.side} ${r.floor}` : ''), el('td', { class: 'l' }, r.name), el('td', {}, r.required),
@@ -74,10 +74,10 @@
     const rowOf = (r, last) => [{ v: r.name, s: last ? 'sumtxt' : 'txt' }, ...[r.biz, r.sup, r.coop, r.total].map((v) => ({ v, s: last ? 'sumnum' : 'num' })), { v: r.quota || 0, s: last ? 'sumnum' : 'num' }, { v: r.pct == null ? '-' : r.pct / 100, s: r.pct == null ? 'txt' : 'pct' }];
     const s1 = { name: '사업부별', widths: [16, 12, 12, 12, 12, 14, 12], merges: ['A1:G1'], rows: [
       [{ v: `${m.title} - ${m.stamp}`, s: 'title' }], [`기준 근무조: ${m.basis.join('·')}`], [],
-      ['구분', '환경미화원', '행정인력', '협정사', '합계', '일일근무정원', '상근 대비'].map(H),
+      ['구분', '현장투입', '행정인력', '협정사', '합계', '일일근무정원', '상근 대비'].map(H),
       ...m.sumRows.map((r) => rowOf(r, false)), rowOf(m.tot, true)] };
     const s2 = { name: '구역별', widths: [14, 14, 28, 8, 12, 8, 8, 8, 10], rows: [
-      ['사업부', '구분·층', '구역', '필요', '환경미화원', '행정', '협정', '합계', '달성'].map(H),
+      ['사업부', '구분·층', '구역', '필요', '현장투입', '행정', '협정', '합계', '달성'].map(H),
       ...m.zoneRows.map((r) => [r.div, `${r.side} ${r.floor}`, r.name, r.required, r.biz, r.sup, r.coop, r.total, { v: r.pct == null ? '-' : r.pct / 100, s: r.pct == null ? 'txt' : 'pct' }])] };
     const s3 = { name: '출근현황', widths: [16, 8, 8, 8, 12, 8, 8, 8, 16, 10], rows: [
       ['구분', '출근', ...ATT_COLS.map(([, l]) => l), '출처'].map(H),

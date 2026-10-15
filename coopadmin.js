@@ -1,7 +1,7 @@
 /* 협정인력 관리 (관리자·최고관리자): 오늘 출근 · 명단 · 가입 신청 · QR 장소 · 협정사 업체 */
 (() => {
   'use strict';
-  const { sb, state, el, seg, busy, toast, register, bizDivs, divName, shortDiv, printNode } = window.APP;
+  const { sb, state, el, seg, busy, toast, register, bizDivs, divName, shortDiv, divTone, printNode } = window.APP;
   const { today, addDays, hhmm, dateLabel, shiftList, ensureShifts, zoneName, zoneSort } = window.APP.ops;
   const TABS = [['today', '오늘 출근'], ['workers', '명단'], ['pending', '가입 신청'], ['places', 'QR 장소'], ['vendors', '협정사 업체']];
   const S = { tab: 'today', date: null, edit: null, pend: null };
@@ -28,6 +28,14 @@
         q(sb.from('coop_attendance').select('id,worker_id,place_id,clock_in,clock_out,note').eq('work_date', S.date)),
         q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active'))]);
     } catch (e) { body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); return; }
+    // 사업부별 QR 자동 생성: 사업부마다 사용 중인 QR 장소가 없으면 만든다
+    const missing = bizDivs().filter((d) => !places.some((p) => p.division_id === d.id && p.active));
+    if (missing.length) {
+      try {
+        await sb.from('coop_places').insert(missing.map((d) => ({ name: `${shortDiv(d.name)} 협정 출퇴근`, division_id: d.id })));
+        places = await q(sb.from('coop_places').select('id,name,qr_token,zone_id,division_id,active').order('name'));
+      } catch (e) { /* 권한이 없으면 건너뜀 */ }
+    }
     const D = { vendors, workers, places, pending, att, zones };
     const redraw = () => coopView(body);
     const tabs = seg(TABS.map(([k, l]) => [k, k === 'pending' && pending.length ? `${l} ${pending.length}` : l]), S.tab, (v) => { S.tab = v; S.edit = null; S.pend = null; draw(); });
@@ -182,7 +190,19 @@
           el('b', {}, pl.name), el('small', {}, [shortDiv(divName(pl.division_id)), z ? `${z.floor} ${zoneName(z)}` : ''].filter(Boolean).join(' · ') || '사업부 미지정'),
           el('div', { class: 'zact wrap' }, poster, copy, tog));
       })) : el('p', { class: 'empty' }, '아직 등록된 장소가 없습니다'));
-    return el('div', {}, form, list);
+    // 사업부별 대표 QR (자동 생성) – 인쇄만 하면 됨
+    const main = bizDivs().map((d) => ({ d, pl: D.places.find((p) => p.division_id === d.id && p.active && !p.zone_id) || D.places.find((p) => p.division_id === d.id && p.active) })).filter((x) => x.pl);
+    const mainCard = el('div', { class: 'card' }, el('h2', {}, '사업부별 출퇴근 QR'),
+      el('p', { class: 'hint' }, '자동으로 만들어진 QR입니다. 인쇄해서 협정인력이 보이는 곳에 붙이면 됩니다.'),
+      main.length ? el('div', { class: 'qrgrid big' }, main.map(({ d, pl }) => {
+        const url = qrUrl(pl.qr_token);
+        const pr = el('button', { class: 'btn sm', type: 'button' }, '인쇄');
+        pr.addEventListener('click', () => printNode(el('div', { class: 'poster' },
+          el('h1', {}, '협정인력 출퇴근'), el('h2', {}, d.name), qrImg(url, 14),
+          el('p', {}, '휴대폰 카메라로 QR을 스캔하세요'), el('ol', {}, el('li', {}, '이름을 선택'), el('li', {}, 'PIN 4자리 입력'), el('li', {}, '출근 또는 퇴근 버튼')))));
+        return el('div', { class: 'qrcell ' + divTone(d.id) }, el('b', {}, shortDiv(d.name)), qrImg(url, 6), el('small', {}, pl.name), pr);
+      })) : el('p', { class: 'empty' }, 'QR을 만들지 못했습니다. 관리자 권한을 확인하세요'));
+    return el('div', {}, mainCard, form, list);
   }
 
   /* ---- 협정사 업체 ---- */

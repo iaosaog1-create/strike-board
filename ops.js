@@ -162,13 +162,15 @@
     const o = ctx();
     const redraw = () => attView(body);
     body.replaceChildren(pickers(o, redraw), loading());
-    let cur, leave, dep;
+    let cur, leave, dep, tms;
     try {
-      [cur, leave, dep] = await Promise.all([
+      [cur, leave, dep, tms] = await Promise.all([
         q(sb.from('attendance_latest').select('*').eq('work_date', o.date).eq('division_id', o.division).eq('shift', o.shift)),
         sb.rpc('leave_counts', { p_date: o.date }).then((r) => (r.error ? [] : r.data || [])),
-        loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).eq('source', '사업부'))]);
+        loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).eq('source', '사업부')),
+        sb.rpc('leave_team', { p_date: o.date }).then((r) => (r.error ? [] : r.data || []), () => [])]);
     } catch (e) { body.replaceChildren(pickers(o, redraw), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); return; }
+    const rosterN = (tms || []).filter((t) => t.division_id === o.division && t.shift === o.shift).reduce((n, t) => n + t.roster, 0);
     const row = cur[0] || null;
     const lv = leave.find((x) => x.division_id === o.division && x.shift === o.shift) || null;
     const depSum = dep.reduce((t, r) => t + r.headcount, 0);
@@ -185,10 +187,18 @@
     else if (lv) noteLines.push('업로드한 휴무계획·ERP 근태로 자동 채운 값입니다. 현장 상황에 맞게 고쳐서 저장하세요.');
     else noteLines.push('업로드된 휴무·근태 자료가 없습니다. 직접 입력하세요.');
     if (lv && (lv.half || lv.pending)) noteLines.push(`반차 ${lv.half}명 (인원에 포함하지 않음) · 승인 대기 ${lv.pending}명 (반영 안 됨)`);
+    const absTxt = el('b', {}, '');
+    const absBox = el('div', { class: 'absbox' }, el('span', {}, '결근 (자동 계산)'), absTxt, el('small', {}, rosterN ? `정원 ${rosterN}명 − 출근 − 근태` : '정원은 휴무계획 업로드 후 계산됩니다'));
+    const calcAbs = () => {
+      if (!rosterN) { absTxt.textContent = '-'; return; }
+      const v = ATT_FIELDS.filter(([k]) => k !== 'abnormal').reduce((n, [k]) => n + (toInt(inputs[k].value) || 0), 0);
+      absTxt.textContent = Math.max(0, rosterN - v) + '명';
+    };
+    ATT_FIELDS.forEach(([k]) => inputs[k].addEventListener('input', calcAbs)); calcAbs();
     const auto = el('button', { class: 'btn ghost sm', type: 'button', disabled: !lv }, '자동값 다시 채우기');
-    auto.addEventListener('click', () => fill(autoVals));
+    auto.addEventListener('click', () => { fill(autoVals); calcAbs(); });
     const sumBtn = el('button', { class: 'btn ghost sm', type: 'button' }, `인력 입력 합계(${depSum}명)로 출근 채우기`);
-    sumBtn.addEventListener('click', () => { inputs.present.value = String(depSum); });
+    sumBtn.addEventListener('click', () => { inputs.present.value = String(depSum); calcAbs(); });
     const save = el('button', { class: 'btn', type: 'button' }, '저장');
     save.addEventListener('click', busy(save, async () => {
       const rec = { work_date: o.date, division_id: o.division, shift: o.shift, entered_by: state.me.id };
@@ -205,7 +215,7 @@
     body.replaceChildren(pickers(o, redraw),
       el('div', { class: 'card' }, el('h2', {}, `${shortDiv(divName(o.division))} · ${o.shift} 출근 현황`),
         ...noteLines.map((t) => el('p', { class: 'hint' }, t)),
-        grid,
+        grid, absBox,
         el('div', { class: 'btnrow' }, auto, sumBtn), save));
   }
 
@@ -219,7 +229,9 @@
     r.total = r.biz + r.sup + r.coop;
     return r;
   }
-  const quotaSum = (quota, div, basis) => quota.filter((x) => x.division_id === div && basis.includes(x.shift)).reduce((t, x) => t + x.daily_quota, 0);
+  const ATT_LEAVE = ['day_off', 'annual', 'health', 'leave_long', 'sick', 'other'];
+  const quotaSumRaw = (quota, div, basis) => quota.filter((x) => x.division_id === div && basis.includes(x.shift)).reduce((t, x) => t + x.daily_quota, 0);
+  const quotaSum = quotaSumRaw;
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
   const tone = (p) => (p == null ? 'none' : p >= 100 ? 'ok' : p >= 80 ? 'mid' : 'low');
 
@@ -250,16 +262,18 @@
     (state.timers || []).forEach(clearInterval); state.timers = [];
     const o = ctx(true);
     const me = state.me;
-    if (!o.basis) o.basis = basisFor(null);
+    if (!o.basis || !o.basisSet) { o.basis = [...shiftList()]; o.basisSet = true; }
     if (!isMaster(me) && o.division === 'all') o.division = me.division_id;
     const redraw = () => statusView(body);
-    let cache = null; let fdiv = null;
+    let cache = null; let fdiv = null; let teamRows = null; let attRows = [];
     const refresh = async () => {
       let zones, rows, quota;
       try {
-        [zones, rows, quota] = await Promise.all([
+        [zones, rows, quota, teamRows, attRows] = await Promise.all([
           q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active')),
-          loadLatest(o.date, o.division === 'all' ? null : o.division), loadQuota()]);
+          loadLatest(o.date, o.division === 'all' ? null : o.division), loadQuota(),
+          sb.rpc('leave_team', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null),
+          sb.from('attendance_latest').select('division_id,shift,present,day_off,annual,health,leave_long,sick,other').eq('work_date', o.date).then((r) => (r.error ? [] : r.data || []), () => [])]);
       } catch (e) { return body.replaceChildren(pickers(o, redraw, { shiftPick: false, allDiv: true }), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); }
       draw(zones, rows, quota);
     };
@@ -272,8 +286,13 @@
           type: 'button', class: 'chip' + (basis.includes(s) ? ' on' : ''), 'aria-pressed': String(basis.includes(s)),
           onclick: () => { o.basis = basis.includes(s) ? basis.filter((x) => x !== s) : [...basis, s]; draw(zones, rows, quota); }
         }, s)),
-        el('button', { type: 'button', class: 'chip auto', onclick: () => { o.basis = basisFor(null); draw(zones, rows, quota); } }, '현재 시각 기준'));
+        el('button', { type: 'button', class: 'chip auto', onclick: () => { o.basis = basisFor(null); draw(zones, rows, quota); } }, '현재 시각 기준'),
+        el('button', { type: 'button', class: 'chip auto', onclick: () => { o.basis = [...shiftList()]; draw(zones, rows, quota); } }, '하루 전체 합산'));
       const inB = (x) => basis.includes(x.shift);
+      const allDay = basis.length >= shiftList().length;
+      const tIn = (s) => basis.includes(s) || (s === '미지정' && allDay);
+      const availOf = (d) => (teamRows || []).filter((t) => t.division_id === d && tIn(t.shift)).reduce((n, t) => n + t.roster - t.absent, 0);
+      const quotaSum = (qu, d, b) => { const v = quotaSumRaw(qu, d, b); return v > 0 ? v : availOf(d); };
       // 사업부별 요약표
       let tot = { biz: 0, sup: 0, coop: 0, total: 0, q: 0 };
       const trs = divs.map((d) => {
@@ -288,7 +307,7 @@
         el('div', { class: 'f' }, el('span', { class: 'hint' }, '기준 근무조'), chips));
       const summary = el('div', { class: 'card' }, el('h2', {}, '사업부별 인원 합계'),
         el('div', { class: 'tblwrap' }, el('table', { class: 'tbl' },
-          el('thead', {}, el('tr', {}, ...['구분', '환경미화원', '행정인력', '협정', '합계', '일일정원', '상근 대비'].map((h) => el('th', {}, h)))),
+          el('thead', {}, el('tr', {}, ...['구분', '현장투입', '행정인력', '협정', '합계', '일일정원', '상근 대비'].map((h) => el('th', {}, h)))),
           el('tbody', {}, trs))),
         el('p', { class: 'hint' }, '상근 대비 = 근무 인원 합계 ÷ 선택한 근무조의 일일근무정원'));
       // 큰 숫자 카드: 사업부별 + 지원·협정
@@ -300,7 +319,7 @@
           ringNode(p, t),
           el('div', { class: 'tb' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),
           el('div', { class: 'tp ' + t }, p == null ? '정원 미설정' : `${ICO[t]} ${t === 'ok' ? '충족' : '부족 ' + Math.max(0, qq - sm.total) + '명'}`),
-          el('div', { class: 'm3' }, el('div', {}, el('b', {}, String(sm.biz)), '환경미화원'), el('div', {}, el('b', {}, String(sm.sup)), '지원'), el('div', {}, el('b', {}, String(sm.coop)), '협정')));
+          el('div', { class: 'm3' }, el('div', {}, el('b', {}, String(sm.biz)), '현장투입'), el('div', {}, el('b', {}, String(sm.sup)), '지원'), el('div', {}, el('b', {}, String(sm.coop)), '협정')));
       });
       const supDepts = state.divisions.filter((d) => d.kind === '지원부서');
       const inScope = (x) => inB(x) && (o.division === 'all' || x.division_id === o.division);
@@ -317,6 +336,37 @@
         el('div', { class: 'flap' }, digits.map((c) => el('div', { class: 'd' }, c)), el('span', { class: 'unit' }, '명')),
         shareBar,
         el('div', { class: 'shl' }, divs.map((d) => el('span', {}, `${shortDiv(d.name)} ${sumBy(rows, (x) => x.division_id === d.id && inB(x)).total}`))));
+      // 팀별 정원·근무 현황 (휴무계획 기준) + 근무조 합산
+      const teamCard = el('div', { class: 'card teamcard' }, el('h2', {}, '팀별 정원 · 근무 현황'));
+      if (teamRows === null) teamCard.append(el('p', { class: 'hint' }, '팀별 집계를 불러오지 못했습니다. 08_team.sql 실행 여부를 확인하세요'));
+      else if (!teamRows.length) teamCard.append(el('p', { class: 'hint' }, '휴무계획을 업로드하면 팀별 정원이 나옵니다'));
+      else {
+        teamCard.append(el('p', { class: 'hint' }, '정원 = 휴무계획 명단, 출근 예정 = 정원 − 주휴·연차·휴직 등. 결근 = 정원 − 출근 − 근태(휴무·연차·병가·기타 등), 출근 현황을 입력한 근무조만 계산됩니다.'));
+        for (const d of divs) {
+          const tr = teamRows.filter((t) => t.division_id === d.id).sort((a, b) => a.team.localeCompare(b.team, 'ko', { numeric: true }));
+          if (!tr.length) continue;
+          const sum = tr.reduce((s, t) => ({ r: s.r + t.roster, a: s.a + t.absent }), { r: 0, a: 0 });
+          const trows = tr.map((t) => el('tr', {}, el('th', {}, t.team), el('td', {}, t.shift), el('td', {}, t.roster), el('td', {}, t.absent), el('td', { class: 'b' }, t.roster - t.absent)));
+          trows.push(el('tr', { class: 'sum' }, el('th', {}, '합계'), el('td', {}, ''), el('td', {}, sum.r), el('td', {}, sum.a), el('td', { class: 'b' }, sum.r - sum.a)));
+          const shifts = [...new Set([...shiftList(), ...tr.map((t) => t.shift)])].filter((s) => tr.some((t) => t.shift === s) || rows.some((r) => r.division_id === d.id && r.shift === s));
+          const T = { r: 0, k: 0, p: 0, a: 0, c: 0, any: false };
+          const srows = shifts.map((s) => {
+            const rs = tr.filter((t) => t.shift === s).reduce((n, t) => n + t.roster, 0);
+            const at = attRows.find((x) => x.division_id === d.id && x.shift === s);
+            const cu = sumBy(rows, (x) => x.division_id === d.id && x.shift === s).total;
+            const kt = at ? ATT_LEAVE.reduce((n, k) => n + (at[k] || 0), 0) : null;
+            const ab = at ? Math.max(0, rs - at.present - kt) : null;
+            T.r += rs; T.c += cu; if (at) { T.any = true; T.k += kt; T.p += at.present; T.a += ab; }
+            return el('tr', {}, el('th', {}, s), el('td', {}, rs || '-'), el('td', {}, at ? kt : '-'), el('td', { class: 'b' }, at ? at.present : '-'),
+              el('td', { class: 'pc ' + (ab ? 'low' : 'none') }, at ? ab : '-'), el('td', {}, cu));
+          });
+          srows.push(el('tr', { class: 'sum' }, el('th', {}, '하루 합계'), el('td', {}, T.r || '-'), el('td', {}, T.any ? T.k : '-'), el('td', { class: 'b' }, T.any ? T.p : '-'),
+            el('td', { class: 'pc ' + (T.a ? 'low' : 'none') }, T.any ? T.a : '-'), el('td', {}, T.c)));
+          teamCard.append(el('h3', { class: 'divh2 ' + divTone(d.id) }, d.name),
+            el('div', { class: 'tblwrap' }, el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, ...['팀', '근무조', '정원', '휴무·휴가', '출근 예정'].map((h) => el('th', {}, h)))), el('tbody', {}, trows))),
+            el('div', { class: 'tblwrap' }, el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, ...['근무조', '정원', '근태', '출근', '결근', '현재 배치'].map((h) => el('th', {}, h)))), el('tbody', {}, srows))));
+        }
+      }
       // 부족 구역 강조
       const lacks = shortages(divs, zones, rows, basis);
       const lackSet = new Set(lacks.map((l) => l.zone.id));
@@ -336,7 +386,7 @@
         return el('div', { class: 'rm ' + t },
           el('div', { class: 'rt' }, el('b', {}, z.task + (z.label ? ` (${z.label})` : '')), z.required > 0 ? el('span', { class: 'bd' }, lack ? `${ICO[t]} 부족 ${lack}` : '✔ 충족') : null),
           el('div', { class: 'rn' }, String(sm.total), el('small', {}, z.required > 0 ? `/ 필요 ${z.required}명` : '필요 인원 미설정')),
-          el('div', { class: 'rs' }, `환경미화원 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`));
+          el('div', { class: 'rs' }, `현장투입 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`));
       };
       const floorCard = (side, f) => {
         const tot = f.zones.reduce((t, z) => t + sumBy(rows, (x) => x.zone_id === z.id && inB(x)).total, 0); const req = f.zones.reduce((t, z) => t + (z.required || 0), 0);
@@ -356,7 +406,7 @@
       const bar = pickers(o, redraw, { shiftPick: false, allDiv: true });
       bar.append(el('button', { type: 'button', class: 'btn ghost sm', onclick: refresh }, '새로고침'),
         el('button', { type: 'button', class: 'btn sm', onclick: openBoard }, '상황판 (큰 화면)'));
-      body.replaceChildren(bar, head, flip, tilesRow, lackCard, summary, floorsCard);
+      body.replaceChildren(bar, head, flip, tilesRow, teamCard, lackCard, summary, floorsCard);
     };
     /* 상황판: 큰 글씨 전체화면, 30초마다 자동 갱신 */
     function openBoard() {
@@ -403,7 +453,7 @@
 
     body.replaceChildren(pickers(o, redraw, { shiftPick: false, allDiv: true }), loading());
     await refresh();
-    state.timers.push(setInterval(() => { if (state.menu === 'status' && document.body.contains(body)) refresh(); }, 60000));
+    state.timers.push(setInterval(() => { if ((state.menu === 'status' || state.menu === 'home') && document.body.contains(body)) refresh(); }, 60000));
   }
 
   /* =========================================================

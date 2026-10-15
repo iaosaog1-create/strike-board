@@ -250,9 +250,10 @@
   function mainView() {
     stopTimers();
     const me = state.me;
-    const menus = SCREENS.filter((s) => s.roles.includes(me.role))
+    const menus = SCREENS.filter((s) => s.roles.includes(me.role) && !(s.key === 'status' && s.roles.includes(me.role)))
       .sort((a, b) => MENU_ORDER.indexOf(a.key) - MENU_ORDER.indexOf(b.key));
     if (!menus.some((s) => s.key === state.menu)) state.menu = 'home';
+    if (state.menu === 'status') state.menu = 'home';
     const nav = el('nav', { class: 'menu', 'aria-label': '메뉴' }, ...menus.map((s) =>
       el('button', { type: 'button', class: state.menu === s.key ? 'on' : '', onclick: () => { state.menu = s.key; mainView(); } },
         s.label, s.key === 'approve' && state.counts.pending ? el('span', { class: 'cnt' }, state.counts.pending) : null)));
@@ -268,6 +269,8 @@
   }
   function homeView(body) {
     const me = state.me;
+    const st = SCREENS.find((s) => s.key === 'status');
+    if (st && st.roles.includes(me.role)) return st.render(body);   // 로그인하면 현황이 첫 화면
     const mine = SCREENS.filter((s) => s.key !== 'home' && s.roles.includes(me.role) && s.desc)
       .sort((a, b) => MENU_ORDER.indexOf(a.key) - MENU_ORDER.indexOf(b.key));
     body.append(el('div', { class: 'card' },
@@ -548,7 +551,7 @@
   }
 
   /* ---------- 화면 등록 + 다른 기능 파일에 공유할 도구 ---------- */
-  register('home', '홈', ALL_ROLES, homeView);
+  register('home', '현황', ALL_ROLES, homeView);
   register('setup', '구역·정원 설정', ['master', 'admin'], setupView, '구역·정원·업무 종류를 직접 입력');
   register('approve', '가입 승인', ['master'], approveView, '가입 신청을 확인하고 권한 지정');
 
