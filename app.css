@@ -325,3 +325,56 @@ body.boardon{overflow:hidden}
 .legend .lg{border-radius:6px;padding:1px 8px}.lg.ok{background:var(--okbg);color:var(--okc)}.lg.mid{background:var(--midbg);color:var(--midc)}.lg.low{background:var(--lowbg);color:var(--lowc)}
 @media (max-width:760px){.stiles{grid-template-columns:1fr 1fr}.stile .tb{font-size:42px}.floors{grid-template-columns:1fr}.bld{padding:8px;gap:6px}.rm .rn{font-size:32px}.rm .rt{font-size:16px}.rm .rs{font-size:12px}.floor .fh{font-size:18px}}
 .shell>div>*+.card,.shell>div>*+.stiles,.shell>div>*+.seg{margin-top:14px}
+
+/* ===== 그룹 앱 스타일 맞춤 (연회색 바탕·흰 카드·알약 탭·링·전광판) ===== */
+:root{--base:#2B2F36;--base-dark:#1d2026;--bg:#F3F4F6;--ink:#2B2F36;--sub:#7A8190;--line:#E3E6EB;--field:#fff;--field-line:#D5D9E0;--chip:#EDEFF2;--blue:#6FA0EC;--blue-bg:#EEF3FC;--sig:#FFE79A}
+body{font-size:17px;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif}
+.top{background:#fff;color:var(--ink);border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;gap:10px;min-height:0;position:sticky;top:0;z-index:10}
+.top .lg{width:40px;height:40px;border-radius:50%;flex:none;border:1px solid var(--line);background:#fff}
+.top .tt{display:flex;flex-direction:column;min-width:0}
+.top h1{font-size:17px;font-weight:800;letter-spacing:-.3px}
+.top .tt small{font-size:12px;color:var(--sub);margin-top:1px}
+.top .who{font-size:13px;color:var(--sub)}.top .who b{font-size:14px;color:var(--ink)}
+.btn-out{background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:14px;min-height:36px;font-weight:700}
+.card{border-radius:18px;padding:16px;box-shadow:none;border:1px solid var(--line)}
+.card h2{font-size:17px;font-weight:800}
+.title{font-size:26px}
+input[type=text],input[type=password],input[type=search],select,input[type=date],input[type=time]{border:1px solid var(--field-line);border-radius:12px;background:#fff;font-size:17px;font-weight:600;min-height:52px}
+input:focus,select:focus,button:focus-visible{outline:3px solid #6FA0EC;outline-offset:1px}
+.btn{border-radius:13px;background:var(--ink);font-size:18px;min-height:54px}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--field-line)}
+.seg{background:#E6E8EC;border-radius:12px;padding:4px;gap:4px;flex-wrap:nowrap;overflow-x:auto}
+.seg button{background:transparent;color:var(--sub);border-radius:9px;min-height:44px;font-size:16px;font-weight:700;white-space:nowrap;min-width:0;padding:0 12px}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.seg button.dv-t1,.seg button.dv-t2,.seg button.dv-bd{margin:0}
+.menu{background:#E6E8EC;border-radius:12px;padding:4px;gap:4px;position:sticky;top:66px;z-index:9}
+.menu button{background:transparent;color:var(--sub);border-radius:9px;min-height:44px;font-size:16px;padding:0 16px}
+.menu button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.list-item{border-radius:14px}
+.rows,.soon div{background:#fff}
+/* 링 + 사업부 카드 */
+.stile{border-radius:18px;text-align:center;padding:14px 12px}
+.stile .tn{font-size:17px;font-weight:800}
+.ring{position:relative;width:84px;height:84px;margin:8px auto 4px}
+.ring.ok{color:#2FA67C}.ring.mid{color:#E0A020}.ring.low{color:#E2705F}
+.ring svg{transform:rotate(-90deg)}
+.ring .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--ink)}
+.ring .c b{font-size:18px;font-weight:800;line-height:1}.ring .c span{font-size:10px;opacity:.7;margin-top:2px}
+.stile .tb{font-size:30px;font-weight:800}.stile .tb small{font-size:14px}
+.stile .tp{font-size:15px}
+.stile .m3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.stile .m3 div{background:rgba(255,255,255,.7);border-radius:10px;padding:6px 2px;font-size:11px;color:var(--ink);display:flex;flex-direction:column;align-items:center}
+.stile .m3 b{font-size:18px;font-weight:800}
+/* 전광판 */
+.flipboard{background:linear-gradient(135deg,#FFF6D2,#FFEFB8);border:1px solid #F1DC96;border-radius:18px;padding:14px 16px}
+.flipboard .lb{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px;font-weight:700;color:#6b5a1a}
+.flipboard .flap{display:flex;align-items:flex-end;gap:6px;margin:10px 0}
+.flipboard .d{width:46px;height:66px;border-radius:10px;background:#2B2F36;color:#FFE79A;font-size:46px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 -2px 0 rgba(255,255,255,.12);position:relative}
+.flipboard .d:after{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:rgba(0,0,0,.45)}
+.flipboard .unit{font-size:20px;font-weight:800;color:#6b5a1a;margin-left:4px;padding-bottom:6px}
+.flipboard .share{display:flex;height:12px;border-radius:8px;overflow:hidden;background:rgba(0,0,0,.08)}
+.flipboard .share i{display:block;height:100%}
+.flipboard .share i.dv-t1{background:var(--t1-line)}.flipboard .share i.dv-t2{background:var(--t2-line)}.flipboard .share i.dv-bd{background:var(--bd-line)}
+.flipboard .shl{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:13px;font-weight:700;color:#6b5a1a}
+@media (max-width:760px){.stile .tb{font-size:26px}.flipboard .d{width:40px;height:58px;font-size:40px}}
+@media (max-width:600px){.top .who{display:none}.top h1{font-size:16px}.tbl,.rtbl{font-size:14px}.tbl th,.tbl td,.rtbl th,.rtbl td{padding:8px 4px}.stile .m3 div{font-size:10px}}

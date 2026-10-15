@@ -223,6 +223,14 @@
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
   const tone = (p) => (p == null ? 'none' : p >= 100 ? 'ok' : p >= 80 ? 'mid' : 'low');
 
+  /* 링 그래프 (SVG 속성만 사용 → CSP 안전) */
+  function ringNode(p, t) {
+    const C = 2 * Math.PI * 34, v = Math.min(100, p || 0);
+    const w = document.createElement('div'); w.className = 'ring ' + t;
+    w.innerHTML = `<svg viewBox="0 0 84 84" width="84" height="84" aria-hidden="true"><circle cx="42" cy="42" r="34" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="9"/><circle cx="42" cy="42" r="34" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(C * v / 100).toFixed(1)} ${C.toFixed(1)}"/></svg>`;
+    const c = document.createElement('div'); c.className = 'c'; c.innerHTML = '<b></b><span>상근 대비</span>'; c.firstChild.textContent = p == null ? '-' : p + '%';
+    w.append(c); return w;
+  }
   /* 부족 구역: 필요 인원보다 적은 구역을 부족 인원이 큰 순서로 */
   function shortages(divs, zones, rows, basis) {
     const out = [];
@@ -289,10 +297,10 @@
         const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq); const t = tone(p);
         return el('div', { class: 'stile ' + divTone(d.id) },
           el('div', { class: 'tn' }, shortDiv(d.name)),
+          ringNode(p, t),
           el('div', { class: 'tb' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),
-          el('div', { class: 'tbar' }, el('i', { class: t, style: `width:${Math.min(100, p || 0)}%` })),
-          el('div', { class: 'tp ' + t }, p == null ? '정원 미설정' : `${ICO[t]} 상근 대비 ${p}%`),
-          el('div', { class: 'ts' }, `환경미화원 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`));
+          el('div', { class: 'tp ' + t }, p == null ? '정원 미설정' : `${ICO[t]} ${t === 'ok' ? '충족' : '부족 ' + Math.max(0, qq - sm.total) + '명'}`),
+          el('div', { class: 'm3' }, el('div', {}, el('b', {}, String(sm.biz)), '환경미화원'), el('div', {}, el('b', {}, String(sm.sup)), '지원'), el('div', {}, el('b', {}, String(sm.coop)), '협정')));
       });
       const supDepts = state.divisions.filter((d) => d.kind === '지원부서');
       const inScope = (x) => inB(x) && (o.division === 'all' || x.division_id === o.division);
@@ -300,6 +308,15 @@
         ...supDepts.map((d) => el('div', { class: 'sl' }, el('span', {}, d.name), el('b', {}, `${rows.filter((x) => x.source === '지원' && x.dept_id === d.id && inScope(x)).reduce((t, x) => t + x.headcount, 0)}명`))),
         el('div', { class: 'sl' }, el('span', {}, '협정인력'), el('b', {}, `${rows.filter((x) => x.source === '협정' && inScope(x)).reduce((t, x) => t + x.headcount, 0)}명`))));
       const tilesRow = el('div', { class: 'stiles' }, tiles);
+      const gTot = divs.reduce((t, d) => t + sumBy(rows, (x) => x.division_id === d.id && inB(x)).total, 0);
+      const gQ = divs.reduce((t, d) => t + quotaSum(quota, d.id, basis), 0); const gP = pct(gTot, gQ);
+      const digits = String(gTot).padStart(3, '0').split('');
+      const shareBar = el('div', { class: 'share' }, divs.map((d) => { const n = sumBy(rows, (x) => x.division_id === d.id && inB(x)).total; return el('i', { class: divTone(d.id), style: `flex:${Math.max(n, 0.0001)}` }); }));
+      const flip = el('div', { class: 'flipboard' },
+        el('div', { class: 'lb' }, el('span', {}, '현재 근무 인원 합계'), el('span', {}, gQ ? `정원 ${gQ}명 · 상근 대비 ${gP}%` : '정원 미설정')),
+        el('div', { class: 'flap' }, digits.map((c) => el('div', { class: 'd' }, c)), el('span', { class: 'unit' }, '명')),
+        shareBar,
+        el('div', { class: 'shl' }, divs.map((d) => el('span', {}, `${shortDiv(d.name)} ${sumBy(rows, (x) => x.division_id === d.id && inB(x)).total}`))));
       // 부족 구역 강조
       const lacks = shortages(divs, zones, rows, basis);
       const lackSet = new Set(lacks.map((l) => l.zone.id));
@@ -339,7 +356,7 @@
       const bar = pickers(o, redraw, { shiftPick: false, allDiv: true });
       bar.append(el('button', { type: 'button', class: 'btn ghost sm', onclick: refresh }, '새로고침'),
         el('button', { type: 'button', class: 'btn sm', onclick: openBoard }, '상황판 (큰 화면)'));
-      body.replaceChildren(bar, head, tilesRow, lackCard, summary, floorsCard);
+      body.replaceChildren(bar, head, flip, tilesRow, lackCard, summary, floorsCard);
     };
     /* 상황판: 큰 글씨 전체화면, 30초마다 자동 갱신 */
     function openBoard() {

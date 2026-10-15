@@ -78,7 +78,8 @@
   function showErr(box, msg) { box.textContent = msg; box.hidden = false; }
 
   function topbar(right) {
-    return el('header', { class: 'top' }, el('h1', {}, 'IAOS 비정상상황'), el('div', { class: 'sp' }), right);
+    return el('header', { class: 'top' }, el('img', { class: 'lg', src: 'icon-192.png', alt: '' }),
+      el('div', { class: 'tt' }, el('h1', {}, 'IAOS 비정상상황'), el('small', {}, '인천공항운영서비스')), el('div', { class: 'sp' }), right);
   }
 
   /* ---------- 로그인 ---------- */
