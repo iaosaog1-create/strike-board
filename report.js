@@ -118,7 +118,26 @@
       snaps.length ? snaps.map((s) => el('button', { type: 'button', class: 'list-item' + (S.sel && S.sel.id === s.id ? ' sel' : ''), onclick: () => { S.sel = s; S.basis = null; redraw(); } },
         el('b', {}, s.label), el('span', { class: 'badge ok' }, '저장됨'), el('small', {}, `${O.hhmm(s.taken_at)}에 저장`), el('span', {}))) : el('p', { class: 'empty' }, '이 날짜에 저장된 현황이 없습니다'));
 
-    const parts = [saveBox, list];
+    /* 시각별 비교: 저장본이 2개 이상일 때 */
+    const cmpHolder = el('div', {});
+    const cmpBtn = el('button', { class: 'btn ghost sm', type: 'button' }, '시각별 비교 보기');
+    cmpBtn.addEventListener('click', busy(cmpBtn, async () => {
+      let all;
+      try { all = await q(sb.from('snapshots').select('id,work_date,label,taken_at,data').eq('work_date', S.date).order('taken_at')); } catch (e) { return toast('불러오지 못했습니다', 'err'); }
+      const ms = all.map((sn) => ({ sn, m: buildModel(sn, zones, O.basisFor(sn.label)) }));
+      const names = ms[0].m.sumRows.map((r) => r.name);
+      const head = el('tr', {}, el('th', {}, '구분'), ...ms.map((x) => el('th', {}, x.sn.label)), el('th', {}, '변화'));
+      const rowOf = (name, get, fmt) => { const vals = ms.map((x) => get(x.m, name)); const d = vals[vals.length - 1] - vals[0];
+        return el('tr', {}, el('th', {}, name), ...vals.map((v) => el('td', {}, fmt(v))), el('td', { class: 'b ' + (d > 0 ? 'up' : d < 0 ? 'down' : '') }, d > 0 ? `+${d}` : String(d))); };
+      const sumRow = (m, n) => (n === '소계' ? m.tot : m.sumRows.find((r) => r.name === n));
+      const trs = [...names.map((n) => rowOf(n, (m, k) => sumRow(m, k).total, String)), rowOf('소계', (m, k) => sumRow(m, k).total, String),
+        rowOf('상근 대비 %(소계)', (m) => m.tot.pct || 0, (v) => v + '%'),
+        rowOf('부족 구역 수', (m) => m.zoneRows.filter((z) => z.required > 0 && z.total < z.required).length, String)];
+      cmpHolder.replaceChildren(el('div', { class: 'tblwrap' }, el('table', { class: 'tbl cmp' }, el('thead', {}, head), el('tbody', {}, trs))),
+        el('p', { class: 'hint' }, '각 저장본은 그 시각의 기준 근무조(08:30·11:00=오전+일근, 12:30=오전+오후+일근, 22:00=오후+야간)로 계산한 인원입니다'));
+    }));
+    const cmpCard = snaps.length >= 2 ? el('div', { class: 'card' }, el('h2', {}, '시각별 비교'), el('p', { class: 'hint' }, `${snaps.map((x) => x.label).join(' → ')} 인원 변화`), cmpBtn, cmpHolder) : null;
+    const parts = [saveBox, cmpCard, list];
     if (S.sel) {
       let full;
       try { [full] = await q(sb.from('snapshots').select('id,work_date,label,taken_at,data').eq('id', S.sel.id)); } catch (e) { full = null; }

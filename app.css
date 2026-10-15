@@ -261,3 +261,67 @@ h2.divh[class*=dv-]{padding:8px 14px;border-radius:12px}
 .tbl tbody th.dv-t1,.rtbl tbody th.dv-t1{background:var(--t1);color:var(--t1-ink)}
 .tbl tbody th.dv-t2,.rtbl tbody th.dv-t2{background:var(--t2);color:var(--t2-ink)}
 .tbl tbody th.dv-bd,.rtbl tbody th.dv-bd{background:var(--bd);color:var(--bd-ink)}
+/* 부족 구역 · 시각별 비교 · 상황판 */
+.lackcard{border-left:8px solid var(--danger)} .lackcard.fine{border-left-color:var(--ok)}
+.lackcard.fine h2{color:var(--ok)} .lackcard h2{color:var(--danger)}
+.lacklist{display:grid;gap:8px;margin-top:8px}
+.lackrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:#FBEAE9}
+.lackrow b{font-size:18px} .lk-n{font-size:17px;color:var(--sub)} .lk-m{font-weight:700;color:var(--danger);font-size:20px;min-width:44px;text-align:right}
+.lk-dv{border-radius:8px;padding:2px 10px;font-weight:700;font-size:15px;background:var(--chip)}
+.lk-dv.dv-t1{background:var(--t1);color:var(--t1-ink)} .lk-dv.dv-t2{background:var(--t2);color:var(--t2-ink)} .lk-dv.dv-bd{background:var(--bd);color:var(--bd-ink)}
+.zcell.lack{border-color:var(--danger);background:#FDF3F2}
+.tbl.cmp td.up{color:var(--ok)} .tbl.cmp td.down{color:var(--danger)}
+body.boardon{overflow:hidden}
+.board{position:fixed;inset:0;z-index:60;background:#F4F6FA;overflow:auto;padding:28px 36px;box-sizing:border-box;display:flex;flex-direction:column;gap:22px}
+.bhead{display:flex;align-items:center;gap:24px} .bhead>div:first-child{flex:1}
+.bhead b{display:block;font-size:38px} .bhead span{font-size:24px;color:var(--sub)}
+.bclock{font-size:56px;font-weight:700;color:var(--base-dark)}
+.bcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.bcard{border-radius:24px;padding:22px 26px;background:var(--chip);text-align:center}
+.bcard.dv-t1{background:var(--t1)} .bcard.dv-t2{background:var(--t2)} .bcard.dv-bd{background:var(--bd)}
+.bname{font-size:36px;font-weight:700} .bbig{font-size:104px;font-weight:700;line-height:1.1} .bbig small{font-size:34px;font-weight:600;margin-left:8px}
+.bpct{font-size:56px;font-weight:700} .bsub{font-size:22px;color:var(--sub);margin-top:6px}
+.black{background:#fff;border-radius:24px;padding:22px 28px;flex:1}
+.black h2{font-size:34px;margin-bottom:10px}
+.blist{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:10px 28px}
+.brow{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;font-size:28px;padding:6px 0;border-bottom:1px solid var(--line)}
+.brow .lk-dv{font-size:22px} .brow .lk-m{font-size:32px}
+@media (max-width:700px){.board{padding:16px}.bhead{flex-wrap:wrap}.bhead b{font-size:24px}.bhead span{font-size:16px}.bclock{font-size:36px}.bbig{font-size:72px}.blist{grid-template-columns:1fr}.brow{font-size:20px}}
+.bhead .btn{width:auto;flex:none;min-height:60px;font-size:22px;padding:0 24px}
+.bhead>div:first-child{min-width:0}
+.tbl.cmp thead th:first-child{text-align:left}
+/* ===== 통합 현황판: 큰 숫자 카드 + 합계 표 + 층 배치도 ===== */
+:root{--okbg:#E4F4EA;--midbg:#FFF1D9;--lowbg:#FCE6E4;--okc:#1F7A4A;--midc:#B96A00;--lowc:#B3261E}
+.stiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stile{border-radius:18px;padding:14px 16px;background:#fff;border:1px solid var(--line);min-width:0}
+.stile .tn{font-size:22px;font-weight:700}
+.stile .tb{font-size:52px;font-weight:700;line-height:1.1}.stile .tb small{font-size:20px;font-weight:600;margin-left:6px}
+.stile .tbar{height:12px;background:rgba(0,0,0,.12);border-radius:8px;overflow:hidden;margin:6px 0}
+.stile .tbar i{display:block;height:100%;border-radius:8px;background:var(--sub)}
+.tbar i.ok{background:var(--okc)}.tbar i.mid{background:var(--midc)}.tbar i.low{background:var(--lowc)}
+.stile .tp{font-size:20px;font-weight:700}.stile .tp.ok{color:var(--okc)}.stile .tp.mid{color:var(--midc)}.stile .tp.low{color:var(--lowc)}
+.stile .ts{font-size:15px;opacity:.85;margin-top:2px}
+.stile.dv-t1{background:var(--t1);color:var(--t1-ink);border-color:var(--t1-line)}
+.stile.dv-t2{background:var(--t2);color:var(--t2-ink);border-color:var(--t2-line)}
+.stile.dv-bd{background:var(--bd);color:var(--bd-ink);border-color:var(--bd-line)}
+.stile.sup .sl{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding:8px 0;font-size:18px}
+.stile.sup .sl b{font-size:28px}
+.floors{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-top:12px}
+.floors .col{display:grid;gap:14px}
+.floor{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px}
+.floor .fh{display:flex;justify-content:space-between;align-items:center;font-size:20px;margin-bottom:8px;gap:8px}
+.floor .fp{font-weight:700;font-size:18px}.fp.ok{color:var(--okc)}.fp.mid{color:var(--midc)}.fp.low{color:var(--lowc)}
+.bld{border:4px solid #8b97b0;border-radius:36px;padding:12px;background:#EEF2F8;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.wing{display:grid;gap:8px;align-content:start;min-width:0}.wing.full{grid-column:1/-1}
+.wl{font-size:14px;font-weight:700;color:var(--sub);letter-spacing:1px}.bld>.wing:nth-child(2) .wl{text-align:right}
+.rm{border-radius:14px;padding:8px 10px;background:#fff;border:3px solid var(--line)}
+.rm.ok{border-color:#7CC79B;background:var(--okbg)}.rm.mid{border-color:#F0B35A;background:var(--midbg)}.rm.low{border-color:#E57A72;background:var(--lowbg)}
+.rm .rt{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:18px}
+.rm .bd{font-size:14px;font-weight:700;border-radius:8px;padding:1px 8px;background:#fff;white-space:nowrap}
+.rm.ok .bd{color:var(--okc)}.rm.mid .bd{color:var(--midc)}.rm.low .bd{color:var(--lowc)}
+.rm .rn{font-size:38px;font-weight:700;line-height:1.15}.rm .rn small{font-size:15px;font-weight:600;color:var(--sub);margin-left:6px}
+.rm .rs{font-size:13px;color:var(--sub)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:15px;color:var(--sub);margin-top:12px}
+.legend .lg{border-radius:6px;padding:1px 8px}.lg.ok{background:var(--okbg);color:var(--okc)}.lg.mid{background:var(--midbg);color:var(--midc)}.lg.low{background:var(--lowbg);color:var(--lowc)}
+@media (max-width:760px){.stiles{grid-template-columns:1fr 1fr}.stile .tb{font-size:42px}.floors{grid-template-columns:1fr}.bld{padding:8px;gap:6px}.rm .rn{font-size:32px}.rm .rt{font-size:16px}.rm .rs{font-size:12px}.floor .fh{font-size:18px}}
+.shell>div>*+.card,.shell>div>*+.stiles,.shell>div>*+.seg{margin-top:14px}

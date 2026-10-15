@@ -223,6 +223,20 @@
   const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
   const tone = (p) => (p == null ? 'none' : p >= 100 ? 'ok' : p >= 80 ? 'mid' : 'low');
 
+  /* 부족 구역: 필요 인원보다 적은 구역을 부족 인원이 큰 순서로 */
+  function shortages(divs, zones, rows, basis) {
+    const out = [];
+    for (const d of divs) {
+      for (const z of zones.filter((x) => x.division_id === d.id && x.active)) {
+        if (!(z.required > 0)) continue;
+        const t = sumBy(rows, (x) => x.zone_id === z.id && basis.includes(x.shift)).total;
+        if (t < z.required) out.push({ div: d, zone: z, total: t, need: z.required, lack: z.required - t, p: pct(t, z.required) });
+      }
+    }
+    return out.sort((a, b) => b.lack - a.lack || a.p - b.p);
+  }
+  const clockTxt = () => { const k = kstNow(); return `${String(k.getUTCHours()).padStart(2, '0')}:${String(k.getUTCMinutes()).padStart(2, '0')}`; };
+
   async function statusView(body) {
     await ensureShifts();
     (state.timers || []).forEach(clearInterval); state.timers = [];
@@ -231,6 +245,7 @@
     if (!o.basis) o.basis = basisFor(null);
     if (!isMaster(me) && o.division === 'all') o.division = me.division_id;
     const redraw = () => statusView(body);
+    let cache = null; let fdiv = null;
     const refresh = async () => {
       let zones, rows, quota;
       try {
@@ -241,6 +256,7 @@
       draw(zones, rows, quota);
     };
     const draw = (zones, rows, quota) => {
+      cache = { zones, rows, quota };
       const divs = (o.division === 'all' ? bizDivs() : bizDivs().filter((d) => d.id === o.division));
       const basis = o.basis;
       const chips = el('div', { class: 'chips' }, ...shiftList().map((s) =>
@@ -259,32 +275,115 @@
         return el('tr', {}, el('th', { class: divTone(d.id) }, shortDiv(d.name)), el('td', {}, s.biz), el('td', {}, s.sup), el('td', {}, s.coop), el('td', { class: 'b' }, s.total), el('td', {}, qq || '-'), el('td', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%'));
       });
       if (divs.length > 1) { const p = pct(tot.total, tot.q); trs.push(el('tr', { class: 'sum' }, el('th', {}, '소계'), el('td', {}, tot.biz), el('td', {}, tot.sup), el('td', {}, tot.coop), el('td', { class: 'b' }, tot.total), el('td', {}, tot.q || '-'), el('td', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%'))); }
-      const summary = el('div', { class: 'card' },
+      const head = el('div', { class: 'card' },
         el('h2', {}, `${dateLabel(o.date)} 근무 현황`),
-        el('div', { class: 'f' }, el('span', { class: 'hint' }, '기준 근무조'), chips),
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, '기준 근무조'), chips));
+      const summary = el('div', { class: 'card' }, el('h2', {}, '사업부별 인원 합계'),
         el('div', { class: 'tblwrap' }, el('table', { class: 'tbl' },
           el('thead', {}, el('tr', {}, ...['구분', '환경미화원', '행정인력', '협정', '합계', '일일정원', '상근 대비'].map((h) => el('th', {}, h)))),
           el('tbody', {}, trs))),
         el('p', { class: 'hint' }, '상근 대비 = 근무 인원 합계 ÷ 선택한 근무조의 일일근무정원'));
-      // 구역별
-      const zsecs = divs.map((d) => {
-        const zs = zones.filter((z) => z.division_id === d.id && (z.active || rows.some((r) => r.zone_id === z.id)));
-        if (!zs.length) return el('div', { class: 'card' }, el('h2', {}, shortDiv(d.name)), el('p', { class: 'empty' }, '등록된 구역이 없습니다'));
-        return el('div', {}, divs.length > 1 ? el('h2', { class: 'divh ' + divTone(d.id) }, d.name) : null,
-          groupZones(zs).map((s) => s.floors.map((f) => el('div', { class: 'card' }, floorHead(s.side, f.floor),
-            el('div', { class: 'zgrid' }, f.zones.map((z) => {
-              const s2 = sumBy(rows, (x) => x.zone_id === z.id && inB(x)); const p = pct(s2.total, z.required);
-              return el('div', { class: 'zcell' },
-                el('div', { class: 'zt' }, el('b', {}, zoneName(z)), el('span', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%')),
-                el('div', { class: 'bar' }, el('i', { class: tone(p), style: `width:${Math.min(100, p || 0)}%` })),
-                el('div', { class: 'zn' }, el('b', {}, `${s2.total}`), ` / 필요 ${z.required}명`),
-                el('small', {}, `사업부 ${s2.biz} · 지원 ${s2.sup} · 협정 ${s2.coop}`));
-            }))))));
+      // 큰 숫자 카드: 사업부별 + 지원·협정
+      const ICO = { ok: '✔', mid: '▲', low: '⚠', none: '' };
+      const tiles = divs.map((d) => {
+        const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq); const t = tone(p);
+        return el('div', { class: 'stile ' + divTone(d.id) },
+          el('div', { class: 'tn' }, shortDiv(d.name)),
+          el('div', { class: 'tb' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),
+          el('div', { class: 'tbar' }, el('i', { class: t, style: `width:${Math.min(100, p || 0)}%` })),
+          el('div', { class: 'tp ' + t }, p == null ? '정원 미설정' : `${ICO[t]} 상근 대비 ${p}%`),
+          el('div', { class: 'ts' }, `환경미화원 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`));
       });
+      const supDepts = state.divisions.filter((d) => d.kind === '지원부서');
+      const inScope = (x) => inB(x) && (o.division === 'all' || x.division_id === o.division);
+      tiles.push(el('div', { class: 'stile sup' }, el('div', { class: 'tn' }, '지원·협정'),
+        ...supDepts.map((d) => el('div', { class: 'sl' }, el('span', {}, d.name), el('b', {}, `${rows.filter((x) => x.source === '지원' && x.dept_id === d.id && inScope(x)).reduce((t, x) => t + x.headcount, 0)}명`))),
+        el('div', { class: 'sl' }, el('span', {}, '협정인력'), el('b', {}, `${rows.filter((x) => x.source === '협정' && inScope(x)).reduce((t, x) => t + x.headcount, 0)}명`))));
+      const tilesRow = el('div', { class: 'stiles' }, tiles);
+      // 부족 구역 강조
+      const lacks = shortages(divs, zones, rows, basis);
+      const lackSet = new Set(lacks.map((l) => l.zone.id));
+      const lackCard = el('div', { class: 'card lackcard' + (lacks.length ? '' : ' fine') },
+        el('h2', {}, lacks.length ? `부족 구역 ${lacks.length}곳` : '모든 구역 충족'),
+        lacks.length ? el('div', { class: 'lacklist' }, lacks.slice(0, 12).map((l) => el('div', { class: 'lackrow' },
+          el('span', { class: 'lk-dv ' + divTone(l.div.id) }, shortDiv(l.div.name)),
+          el('b', {}, `${l.zone.side} ${l.zone.floor} · ${zoneName(l.zone)}`),
+          el('span', { class: 'lk-n' }, `${l.total}/${l.need}명`),
+          el('span', { class: 'lk-m' }, `-${l.lack}`)))) : el('p', { class: 'hint' }, '필요 인원 이상 배치된 상태입니다'),
+        lacks.length > 12 ? el('p', { class: 'hint' }, `외 ${lacks.length - 12}곳은 아래 구역별 현황에서 확인`) : null);
+      // 층별 배치도
+      if (!fdiv || !divs.some((d) => d.id === fdiv)) fdiv = divs[0] && divs[0].id;
+      const room = (z) => {
+        const sm = sumBy(rows, (x) => x.zone_id === z.id && inB(x)); const p = pct(sm.total, z.required); const t = z.required > 0 ? (sm.total >= z.required ? 'ok' : p >= 80 ? 'mid' : 'low') : 'none';
+        const lack = Math.max(0, z.required - sm.total);
+        return el('div', { class: 'rm ' + t },
+          el('div', { class: 'rt' }, el('b', {}, z.task + (z.label ? ` (${z.label})` : '')), z.required > 0 ? el('span', { class: 'bd' }, lack ? `${ICO[t]} 부족 ${lack}` : '✔ 충족') : null),
+          el('div', { class: 'rn' }, String(sm.total), el('small', {}, z.required > 0 ? `/ 필요 ${z.required}명` : '필요 인원 미설정')),
+          el('div', { class: 'rs' }, `환경미화원 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`));
+      };
+      const floorCard = (side, f) => {
+        const tot = f.zones.reduce((t, z) => t + sumBy(rows, (x) => x.zone_id === z.id && inB(x)).total, 0); const req = f.zones.reduce((t, z) => t + (z.required || 0), 0);
+        const p = pct(tot, req); const t = req > 0 ? (tot >= req ? 'ok' : p >= 80 ? 'mid' : 'low') : 'none';
+        const wing = (name, list, cls) => list.length ? el('div', { class: 'wing ' + (cls || '') }, el('div', { class: 'wl' }, name), list.map(room)) : el('div', { class: 'wing' });
+        const E = f.zones.filter((z) => z.area === '동편'), W = f.zones.filter((z) => z.area === '서편'), A = f.zones.filter((z) => z.area !== '동편' && z.area !== '서편');
+        return el('section', { class: 'floor' },
+          el('div', { class: 'fh' }, el('div', {}, el('b', {}, side), ` · ${f.floor}`), el('div', { class: 'fp ' + t }, `${tot}${req ? ` / ${req}` : ''}명${p == null ? '' : ` · ${p}%`}`)),
+          el('div', { class: 'bld' }, wing('◀ 동편', E), wing('서편 ▶', W), A.length ? wing('전체', A, 'full') : null));
+      };
+      const dsel = divs.length > 1 ? seg(divs.map((d) => [String(d.id), shortDiv(d.name)]), String(fdiv), (v) => { fdiv = Number(v); draw(zones, rows, quota); }, (v) => divTone(v)) : null;
+      const fz = zones.filter((z) => z.division_id === fdiv && (z.active || rows.some((r) => r.zone_id === z.id)));
+      const fcols = groupZones(fz).map((g) => el('div', { class: 'col' }, g.floors.map((f) => floorCard(g.side, f))));
+      const floorsCard = el('div', { class: 'card' }, el('h2', {}, '층별 배치 현황'), dsel,
+        fz.length ? el('div', { class: 'floors' }, fcols) : el('p', { class: 'empty' }, '등록된 구역이 없습니다'),
+        el('div', { class: 'legend' }, el('span', {}, el('b', { class: 'lg ok' }, '✔ 충족'), ' 필요 인원 이상'), el('span', {}, el('b', { class: 'lg mid' }, '▲ 부족'), ' 80% 이상'), el('span', {}, el('b', { class: 'lg low' }, '⚠ 부족'), ' 80% 미만')));
       const bar = pickers(o, redraw, { shiftPick: false, allDiv: true });
-      bar.append(el('button', { type: 'button', class: 'btn ghost sm', onclick: refresh }, '새로고침'));
-      body.replaceChildren(bar, summary, zsecs);
+      bar.append(el('button', { type: 'button', class: 'btn ghost sm', onclick: refresh }, '새로고침'),
+        el('button', { type: 'button', class: 'btn sm', onclick: openBoard }, '상황판 (큰 화면)'));
+      body.replaceChildren(bar, head, tilesRow, lackCard, summary, floorsCard);
     };
+    /* 상황판: 큰 글씨 전체화면, 30초마다 자동 갱신 */
+    function openBoard() {
+      const box = el('div', { class: 'board', role: 'dialog', 'aria-label': '상황판' });
+      document.body.append(box); document.body.classList.add('boardon');
+      try { if (box.requestFullscreen) box.requestFullscreen().catch(() => {}); } catch (e) { /* 무시 */ }
+      let timer = null;
+      const close = () => { clearInterval(timer); document.removeEventListener('keydown', onKey); document.body.classList.remove('boardon'); box.remove(); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); };
+      const onKey = (e) => { if (e.key === 'Escape') close(); };
+      document.addEventListener('keydown', onKey);
+      const render = (zones, rows, quota) => {
+        const divs = (o.division === 'all' ? bizDivs() : bizDivs().filter((d) => d.id === o.division));
+        const basis = o.basis; const inB = (x) => basis.includes(x.shift);
+        const lacks = shortages(divs, zones, rows, basis);
+        const cards = divs.map((d) => {
+          const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq);
+          return el('div', { class: 'bcard ' + divTone(d.id) },
+            el('div', { class: 'bname' }, shortDiv(d.name)),
+            el('div', { class: 'bbig' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),
+            el('div', { class: 'bpct pc ' + tone(p) }, p == null ? '-' : p + '%'),
+            el('div', { class: 'bsub' }, `사업부 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`));
+        });
+        box.replaceChildren(
+          el('div', { class: 'bhead' }, el('div', {}, el('b', {}, 'IAOS 비정상상황 근무 현황'), el('span', {}, `${dateLabel(o.date)} · 기준 ${basis.join('·')}`)),
+            el('div', { class: 'bclock' }, clockTxt()), el('button', { type: 'button', class: 'btn ghost', onclick: close }, '닫기 (Esc)')),
+          el('div', { class: 'bcards' }, cards),
+          el('div', { class: 'black' }, el('h2', {}, lacks.length ? `부족 구역 ${lacks.length}곳` : '모든 구역 충족'),
+            lacks.length ? el('div', { class: 'blist' }, lacks.slice(0, 10).map((l) => el('div', { class: 'brow' },
+              el('span', { class: 'lk-dv ' + divTone(l.div.id) }, shortDiv(l.div.name)),
+              el('b', {}, `${l.zone.side} ${l.zone.floor} ${zoneName(l.zone)}`),
+              el('span', {}, `${l.total}/${l.need}`), el('span', { class: 'lk-m' }, `-${l.lack}`)))) : null));
+      };
+      const load = async () => {
+        try {
+          const [zones, rows, quota] = await Promise.all([
+            q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active')),
+            loadLatest(o.date, o.division === 'all' ? null : o.division), loadQuota()]);
+          render(zones, rows, quota);
+        } catch (e) { /* 다음 갱신 때 다시 시도 */ }
+      };
+      if (cache) render(cache.zones, cache.rows, cache.quota);
+      load(); timer = setInterval(load, 30000);
+    }
+
     body.replaceChildren(pickers(o, redraw, { shiftPick: false, allDiv: true }), loading());
     await refresh();
     state.timers.push(setInterval(() => { if (state.menu === 'status' && document.body.contains(body)) refresh(); }, 60000));
