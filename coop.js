@@ -6,6 +6,7 @@
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
   const QR = new URLSearchParams(window.location.search).get('p') || '';
+  const ACT = ['in', 'out'].includes(new URLSearchParams(window.location.search).get('a')) ? new URLSearchParams(window.location.search).get('a') : '';
   const root = document.getElementById('app');
   const el = (tag, props, ...kids) => {
     const n = document.createElement(tag);
@@ -87,6 +88,7 @@
     mount(el('main', { class: 'wrap' },
       el('div', { class: 'cclock' }, el('small', {}, nowDate()), clockEl),
       state.place.name ? el('p', { class: 'place' }, state.place.name) : null,
+      ACT ? el('p', { class: 'actbadge ' + ACT }, ACT === 'in' ? '출근 전용' : '퇴근 전용') : null,
       el('div', { class: 'card' },
         el('label', { class: 'f' }, el('span', { class: 'hint' }, '1. 이름'), name),
         state.vendors.length ? el('label', { class: 'f' }, el('span', { class: 'hint' }, '2. 협정사'), vSel) : null,
@@ -94,7 +96,7 @@
           el('div', { class: 'phonebox' }, el('span', { class: 'mask', 'aria-hidden': 'true' }, '***-**'), phone),
           el('small', { class: 'hint ex' }, '예) 010-1234-5678 이면 ***-**34-5678 → 345678 을 입력')),
         box,
-        el('div', { class: 'f' }, el('span', { class: 'hint' }, `${state.vendors.length ? 4 : 3}. 버튼을 누르세요 (퇴근할 때도 같은 방법)`), el('div', { class: 'two' }, inBtn, outBtn)))));
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, `${state.vendors.length ? 4 : 3}. ${ACT ? '아래 버튼을 누르세요' : '버튼을 누르세요 (퇴근할 때도 같은 방법)'}`), el('div', { class: ACT ? 'one' : 'two' }, ACT !== 'out' ? inBtn : null, ACT !== 'in' ? outBtn : null)))));
   }
 
   function done(d) {

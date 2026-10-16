@@ -841,3 +841,16 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .gcard h2.gh{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .gset{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:999px;font-size:11.5px;font-weight:700;padding:5px 11px;cursor:pointer}
 .gset.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+/* 협정 출근/퇴근 QR 분리 */
+.one{display:block}.one .btn.big{width:100%}
+.actbadge{display:block;width:fit-content;margin:0 auto 10px;border-radius:999px;padding:5px 16px;font-weight:800;font-size:15px;color:#fff;text-align:center}
+.actbadge.in{background:#2FA67C}.actbadge.out{background:var(--ink)}
+.qrdiv{margin-bottom:10px}
+.qrgrid.big.two{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.qrcell.act-in,.qrcell.act-out{background:#fff;border:1px solid var(--line)}
+.qlab{display:inline-block;border-radius:999px;padding:3px 14px;color:#fff;font-size:15px}
+.qlab.in{background:#2FA67C}.qlab.out{background:var(--ink)}
+.qrgrid.big.two .qr{width:100%;max-width:170px;height:auto}
+.poster .plab{display:inline-block;margin:0 auto 6mm;border-radius:999px;padding:3mm 12mm;font-size:34px;font-weight:800;color:#fff}
+.poster .plab.in{background:#2FA67C}.poster .plab.out{background:#222}

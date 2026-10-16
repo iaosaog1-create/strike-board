@@ -7,7 +7,7 @@
   const S = { tab: 'today', date: null, to: null, division: null, zone: '', sel: new Map(), key: '', merge: null };
   const q = async (p) => { const r = await p; if (r.error) throw r.error; return r.data || []; };
   const errMsg = (e) => (e && e.message && /[가-힣]/.test(e.message) && !/violates|constraint/.test(e.message) ? e.message : '처리하지 못했습니다. 입력값과 권한을 확인하세요');
-  const qrUrl = (token) => new URL('coop.html?p=' + encodeURIComponent(token), window.location.href).href;
+  const qrUrl = (token, act) => new URL('coop.html?p=' + encodeURIComponent(token) + (act ? '&a=' + act : ''), window.location.href).href;
   const dotDate = (iso) => { const d = new Date(iso + 'T00:00:00Z'); return `${iso.slice(0, 4)}.${iso.slice(5, 7)}.${iso.slice(8, 10)}(${'일월화수목금토'[d.getUTCDay()]})`; };
   function qrImg(url, cell) {
     const qr = window.qrcode(0, 'M'); qr.addData(url); qr.make();
@@ -209,18 +209,21 @@
   function placesPane(D, redraw) {
     const main = bizDivs().filter((d) => !isChief() || d.id === state.me.division_id)
       .map((d) => ({ d, pl: D.places.find((p) => p.division_id === d.id && p.active && !p.zone_id) || D.places.find((p) => p.division_id === d.id && p.active) })).filter((x) => x.pl);
-    const steps = ['이름 · 협정사 입력', '전화번호 뒤 6자리 입력 (***-**00-0000 의 00-0000)', '출근 또는 퇴근 버튼'];
+    const steps = ['이름 · 협정사 입력', '전화번호 뒤 6자리 입력 (***-**00-0000 의 00-0000)', '아래 버튼 한 번 누르기'];
+    const ACTS = [['in', '출근'], ['out', '퇴근']];
     return el('div', {}, el('div', { class: 'card' }, el('h2', {}, '사업부별 출퇴근 QR'),
-      el('p', { class: 'hint' }, '출근할 때와 퇴근할 때 같은 QR을 찍습니다. 인쇄해서 협정인력이 보이는 곳에 붙이세요.'),
-      main.length ? el('div', { class: 'qrgrid big' }, main.map(({ d, pl }) => {
-        const url = qrUrl(pl.qr_token);
-        const pr = el('button', { class: 'btn sm', type: 'button' }, '인쇄');
-        pr.addEventListener('click', () => printNode(el('div', { class: 'poster' }, el('h1', {}, '협정인력 출퇴근'), el('h2', {}, d.name), qrImg(url, 14),
-          el('p', {}, '출근할 때, 퇴근할 때 휴대폰 카메라로 QR을 스캔하세요'), el('ol', {}, steps.map((s) => el('li', {}, s))))));
-        const copy = el('button', { class: 'btn ghost sm', type: 'button' }, '링크 복사');
-        copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); toast('링크를 복사했습니다'); } catch (e) { toast(url); } });
-        return el('div', { class: 'qrcell ' + divTone(d.id) }, el('b', {}, shortDiv(d.name)), qrImg(url, 6), el('small', {}, pl.name), el('div', { class: 'zact wrap' }, pr, copy));
-      })) : el('p', { class: 'empty' }, 'QR을 만들지 못했습니다. 관리자 권한을 확인하세요')));
+      el('p', { class: 'hint' }, '출근 QR과 퇴근 QR이 따로 있습니다. 출근할 때는 출근 QR, 퇴근할 때는 퇴근 QR을 찍습니다. 각각 인쇄해서 협정인력이 보이는 곳에 붙이세요.'),
+      main.length ? el('div', {}, main.map(({ d, pl }) => el('div', { class: 'qrdiv' },
+        el('h3', { class: 'divh2 ' + divTone(d.id) }, d.name),
+        el('div', { class: 'qrgrid big two' }, ACTS.map(([act, lab]) => {
+          const url = qrUrl(pl.qr_token, act);
+          const pr = el('button', { class: 'btn sm', type: 'button' }, '인쇄');
+          pr.addEventListener('click', () => printNode(el('div', { class: 'poster ' + act }, el('h1', {}, `협정인력 ${lab}`), el('h2', {}, d.name), el('div', { class: 'plab ' + act }, `${lab} QR`), qrImg(url, 14),
+            el('p', {}, `${lab}할 때 휴대폰 카메라로 QR을 스캔하세요`), el('ol', {}, steps.map((s) => el('li', {}, s))))));
+          const copy = el('button', { class: 'btn ghost sm', type: 'button' }, '링크 복사');
+          copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); toast('링크를 복사했습니다'); } catch (e) { toast(url); } });
+          return el('div', { class: 'qrcell act-' + act }, el('b', { class: 'qlab ' + act }, `${lab} QR`), qrImg(url, 6), el('small', {}, pl.name), el('div', { class: 'zact wrap' }, pr, copy));
+        }))))) : el('p', { class: 'empty' }, 'QR을 만들지 못했습니다. 관리자 권한을 확인하세요')));
   }
 
   /* ---- 협정사 업체 ---- */
