@@ -338,6 +338,7 @@
     const isBiz = () => (state.divisions.find((d) => d.id === pick.div) || {}).kind === '사업부';
     pick.role = isBiz() ? (m.status === 'approved' ? m.role : (TITLE_TO_ROLE[m.req_title] || 'leader')) : 'admin';
     const card = el('div', { class: 'card' });
+    let delBtn = null;
     const ok = el('button', { class: 'btn', type: 'button' }, m.status === 'approved' ? '변경 저장' : '승인');
     const no = el('button', { class: 'btn danger', type: 'button' }, '반려');
     const draw = () => {
@@ -360,19 +361,30 @@
         el('div', { class: 'f' }, el('span', { class: 'hint' }, pick.role === 'leader' ? '소속 팀 (필수 · 행정 포함)' : '소속 팀 (선택 · 행정 포함)'),
           seg([...(pick.role === 'leader' ? [] : [['', '없음']]), ...PLAN_TEAMS.map((t) => [t, t])], pick.team, (v) => { pick.team = v; draw(); })),
         pick.team === '행정' ? el('p', { class: 'hint' }, '행정 팀 출근 인원은 현황 총계에서 "지원"으로 집계됩니다') : null,
-        desc, el('div', { class: 'actions' }, ok, no));
+        desc, el('div', { class: 'actions' }, ok, no), delBtn ? el('div', { class: 'actions' }, delBtn) : null);
     };
     draw();
     const run = (approve) => async () => {
       if (approve && pick.role === 'leader' && !pick.team) return toast('팀장은 소속 팀을 선택하세요', 'err');
       const { error } = await sb.rpc('review_member', { p_user: m.id, p_approve: approve, p_role: pick.role, p_team: null, p_plan_team: pick.role === 'leader' ? pick.team || null : (pick.team || null), p_division: pick.div, p_title: pick.title });
-      if (error) return toast('처리하지 못했습니다. 권한을 확인하세요', 'err');
+      if (error) return toast('처리하지 못했습니다: ' + (error.message || '권한을 확인하세요'), 'err');
       toast(approve ? `${m.name}님을 ${ROLE_LABEL[pick.role]}(으)로 승인했습니다` : `${m.name}님을 반려했습니다`);
       state.selected = null;
       await approveView(body);
     };
     ok.addEventListener('click', busy(ok, run(true)));
     no.addEventListener('click', busy(no, run(false)));
+    const del = el('button', { class: 'btn danger ghost', type: 'button' }, '계정 삭제');
+    if (m.role === 'master') del.hidden = true;
+    del.addEventListener('click', busy(del, async () => {
+      if (!window.confirm(`${m.name}(${m.emp_no}) 계정을 완전히 삭제합니다.\n삭제하면 되돌릴 수 없습니다. 계속할까요?`)) return;
+      const { error } = await sb.rpc('delete_member', { p_user: m.id });
+      if (error) return toast('삭제하지 못했습니다: ' + (error.message || '권한을 확인하세요'), 'err');
+      toast(`${m.name}님 계정을 삭제했습니다`);
+      state.selected = null;
+      await approveView(body);
+    }));
+    delBtn = del; draw();
     wrap.append(el('button', { class: 'back', type: 'button', onclick: () => { state.selected = null; drawApprove(body); } }, '← 목록으로'), card);
     return wrap;
   }
