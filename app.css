@@ -788,3 +788,12 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .agrid label.f{margin-top:4px}
 .absbox{margin-top:10px;padding:8px 12px}.absbox span{font-size:13px}.absbox small{font-size:12px}
 @media (min-width:761px){.zgrid .zc:last-child:nth-child(odd){grid-column:auto}.zgrid{grid-template-columns:repeat(auto-fill,minmax(200px,240px))}}
+
+/* 구역 설명(label)이 길어도 화면 폭을 넘지 않게: 한 줄 말줄임 + 격자 최소폭 0 */
+.floors,.floors .col,.floor,.bld,.wing,.rm{min-width:0}
+.floors{grid-template-columns:repeat(2,minmax(0,1fr))}
+.bld{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:760px){.floors{grid-template-columns:minmax(0,1fr)}}
+.rm{overflow:hidden}
+.rm .rt b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm .lb{font-size:10.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}

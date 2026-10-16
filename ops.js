@@ -423,7 +423,8 @@
         const sm = sumBy(rows, (x) => x.zone_id === z.id && inB(x)); const p = pct(sm.total, z.required); const t = z.required > 0 ? (sm.total >= z.required ? 'ok' : p >= 80 ? 'mid' : 'low') : 'none';
         const lack = Math.max(0, z.required - sm.total);
         return el('div', { class: 'rm ' + t },
-          el('div', { class: 'rt' }, el('b', {}, z.task + (z.label ? ` (${z.label})` : ''), (z.area === '동편' || z.area === '서편') ? el('i', { class: 'ar' }, z.area) : null), z.required > 0 ? el('span', { class: 'bd' }, lack ? `${ICO[t]} 부족 ${lack}` : '✔ 충족') : null),
+          el('div', { class: 'rt' }, el('b', {}, z.task, (z.area === '동편' || z.area === '서편') ? el('i', { class: 'ar' }, z.area) : null), z.required > 0 ? el('span', { class: 'bd' }, lack ? `${ICO[t]} 부족 ${lack}` : '✔ 충족') : null),
+          z.label ? el('div', { class: 'lb', title: z.label }, z.label) : null,
           el('div', { class: 'rn' }, String(sm.total), el('small', {}, z.required > 0 ? `/ 필요 ${z.required}명` : '필요 인원 미설정')),
           el('div', { class: 'rs' }, `현장 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`),
           (() => { const g = rosterRows.filter((r) => r.zone_id === z.id && r.checked && inB(r)); return g.length ? el('div', { class: 'rs gn' }, `남 ${g.filter((r) => r.gender === '남').length} · 여 ${g.filter((r) => r.gender === '여').length}` + (g.some((r) => !r.gender) ? ` · 미정 ${g.filter((r) => !r.gender).length}` : '')) : null; })());
