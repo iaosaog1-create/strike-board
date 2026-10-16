@@ -877,3 +877,14 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .tmtime input[type=time]{width:100%;min-height:48px;padding:6px 10px;border:2px solid var(--field-line);border-radius:12px;background:var(--field);font-size:18px;font-weight:600}
 .tmduty{margin-top:8px}.tmduty input{width:100%;min-height:48px;padding:6px 12px;border:2px solid var(--field-line);border-radius:12px;background:var(--field);font-size:17px;font-weight:600}
 .pp.me{box-shadow:0 0 0 2px #1E4B6B inset}
+
+/* 홈 이벤트 신고 카드 */
+.inccard.hot{border:2px solid #E0584D;background:#FFF6F5}
+.inchd{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.inchd h2{margin:0}.inccard.hot .inchd h2{color:#B3261E}
+.itiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.itile{background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px 4px;text-align:center}
+.itile b{display:block;font-size:26px;font-weight:800;line-height:1.2}.itile span{font-size:13px;font-weight:700;color:var(--sub)}
+.itile.new b{color:#B3261E}.itile.doing b{color:#8A5A00}.itile.done b{color:#1d7a5a}
+.inccard .incl{width:100%;border:0;border-top:1px solid #F1D5D1;background:transparent;text-align:left;cursor:pointer;padding:8px 2px}
+.incmore{width:100%;border:0;background:transparent;color:var(--sub);font-weight:700;padding:8px;cursor:pointer}

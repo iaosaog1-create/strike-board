@@ -234,9 +234,10 @@
      3) 구역 현황  (전체 역할 조회)
      ========================================================= */
   /* 집계: rows = deployments_latest 형식, basis = 근무조 배열 */
+  let SUPZ = new Set();   // '현장지원' 구역 id — 이 구역에 배치된 인원은 지원으로 집계
   function sumBy(rows, f) {
     const r = { biz: 0, sup: 0, coop: 0 };
-    for (const x of rows) if (f(x)) { if (x.source === '사업부') r.biz += x.headcount; else if (x.source === '지원') r.sup += x.headcount; else r.coop += x.headcount; }
+    for (const x of rows) if (f(x)) { if (x.source === '사업부') { if (SUPZ.has(x.zone_id)) r.sup += x.headcount; else r.biz += x.headcount; } else if (x.source === '지원') r.sup += x.headcount; else r.coop += x.headcount; }
     r.total = r.biz + r.sup + r.coop;
     return r;
   }
@@ -299,6 +300,7 @@
     };
     const draw = (zones, rows, quota) => {
       cache = { zones, rows, quota };
+      SUPZ = new Set(zones.filter((z) => z.task === '현장지원').map((z) => z.id));
       const divs = (o.division === 'all' ? bizDivs() : bizDivs().filter((d) => d.id === o.division));
       const basis = o.basis;
       const chips = el('div', { class: 'chips' }, ...shiftList().map((s) =>
@@ -315,7 +317,8 @@
       // 행정 팀 출근 체크 인원 = 지원으로 집계
       const admOf = (d) => (rosterRows || []).filter((r) => r.division_id === d && isAdm(r.team) && r.checked && tIn(r.shift)).length;
       const staffOf = (d) => (staffRows || []).filter((x) => x.division_id === d && tIn(x.shift)).length;
-      const sumD = (d, f) => { const r = sumBy(rows, f); const a = admOf(d); const k = staffOf(d); r.sup += a; r.total += a + k; r.adm = a; r.stf = k; if (staffBucket === 'biz') r.biz += k; else r.sup += k; return r; };
+      const stfB = (x) => (x.zone_id ? (SUPZ.has(x.zone_id) ? 'sup' : 'biz') : staffBucket);   // 구역 기준: 현장지원=지원, 그 외 구역=사업부 현장, 구역 없음=master 설정
+      const sumD = (d, f) => { const r = sumBy(rows, f); const a = admOf(d); const ks = (staffRows || []).filter((x) => x.division_id === d && tIn(x.shift)); r.sup += a; r.total += a + ks.length; r.adm = a; r.stf = ks.length; for (const x of ks) { if (stfB(x) === 'biz') r.biz += 1; else r.sup += 1; } return r; };
       const availOf = (d) => (teamRows || []).filter((t) => t.division_id === d && tIn(t.shift) && !isAdm(t.team)).reduce((n, t) => n + t.roster - t.absent, 0);
       const quotaSum = (qu, d, b) => {
         if (ratioCfg.mode === 'custom' && Number(ratioCfg.custom[d]) > 0) return Number(ratioCfg.custom[d]);
@@ -438,7 +441,7 @@
         const groups = new Map();
         for (const z of zs) { const k = `${z.side}\u0001${z.floor}`; if (!groups.has(k)) groups.set(k, { side: z.side, floor: z.floor, ids: new Set(), req: 0 }); const g = groups.get(k); g.ids.add(z.id); g.req += z.required || 0; }
         const list = [...groups.values()].sort((x, y) => (SIDE_ORD[x.side] ?? 9) - (SIDE_ORD[y.side] ?? 9) || x.floor.localeCompare(y.floor, 'ko', { numeric: true }));
-        const frs = list.map((g) => { const sm = sumBy(rows, (x) => g.ids.has(x.zone_id) && inB(x)); const sk = (staffRows || []).filter((x) => g.ids.has(x.zone_id) && tIn(x.shift)).length; if (staffBucket === 'biz') sm.biz += sk; else sm.sup += sk; sm.total += sk; return { name: `${g.side} ${g.floor}`, req: g.req, biz: sm.biz, sup: sm.sup, coop: sm.coop, total: sm.total }; });
+        const frs = list.map((g) => { const sm = sumBy(rows, (x) => g.ids.has(x.zone_id) && inB(x)); const sk = (staffRows || []).filter((x) => g.ids.has(x.zone_id) && tIn(x.shift)).length; for (const x of (staffRows || []).filter((y) => g.ids.has(y.zone_id) && tIn(y.shift))) { if (stfB(x) === 'biz') sm.biz += 1; else sm.sup += 1; } sm.total += sk; return { name: `${g.side} ${g.floor}`, req: g.req, biz: sm.biz, sup: sm.sup, coop: sm.coop, total: sm.total }; });
         const dsm = sumD(d.id, (x) => x.division_id === d.id && inB(x));
         const tt = (teamRows || []).filter((t) => t.division_id === d.id && tIn(t.shift) && !isAdm(t.team));
         const leaveN = tt.reduce((n, t) => n + t.absent, 0);
@@ -490,7 +493,7 @@
           if (error) return toast('저장하지 못했습니다. 다시 시도해 주세요');
           staffBucket = b; toast('관리 인원 집계 칸을 저장했습니다'); draw(zones, rows, quota);
         };
-        const staffBar = el('div', { class: 'ratiobar' }, el('span', { class: 'rl' }, '관리 출근 집계'),
+        const staffBar = el('div', { class: 'ratiobar' }, el('span', { class: 'rl' }, '구역 없는 관리 출근'),
           el('div', { class: 'rseg' }, [['sup', '지원 칸'], ['biz', '근무 칸']].map(([k, l]) => el('button', { type: 'button', class: 'rb' + (staffBucket === k ? ' on' : ''), onclick: () => { if (k !== staffBucket) saveStaff(k); } }, l))));
         const panelOn = canEdit && !!o.ratioOpen;
         if (canEdit) { const h = tilesRow.querySelector('h2'); if (h) { h.classList.add('gh'); h.append(el('button', { type: 'button', class: 'gset' + (panelOn ? ' on' : ''), 'aria-expanded': String(panelOn), onclick: () => { o.ratioOpen = !o.ratioOpen; draw(zones, rows, quota); } }, panelOn ? '닫기' : '집계 기준 변경')); } }
@@ -541,17 +544,23 @@
       const bar = pickers(o, redraw, { shiftPick: false, allDiv: true });
       bar.append(el('button', { type: 'button', class: 'btn ghost sm', onclick: refresh }, '새로고침'),
         el('button', { type: 'button', class: 'btn sm', onclick: openBoard }, '상황판 (큰 화면)'));
-      const incOpen = (incRows || []).filter((r) => r.status !== 'done');
-      const incBanner = incOpen.length ? (() => {
-        const K = (window.APP.incident || {}).KINDS || {}; const ST = (window.APP.incident || {}).STATUS || {};
-        return el('div', { class: 'card incbn' },
-          el('button', { type: 'button', class: 'incgo', onclick: () => { state.menu = 'incident'; window.APP.reload(); } },
-            el('b', {}, `⚠ 이벤트 신고 미조치 ${incOpen.length}건`), el('span', {}, '신고 목록 보기 ›')),
-          ...incOpen.slice(0, 3).map((r) => el('div', { class: 'incl ' + r.status },
-            el('span', { class: 'ik' }, (K[r.kind] || { label: '' }).label.slice(0, 2)), el('b', {}, (r.types || []).join(' · ')),
-            el('small', {}, `${shortDiv(divName(r.division_id))} · ${r.place || '장소 미기재'} · ${(window.APP.incident || { fmt: (x) => x }).fmt(r.occurred_at)}`),
-            el('em', {}, ST[r.status] || ''))));
-      })() : null;
+      const incBanner = (() => {
+        const I = window.APP.incident || { KINDS: {}, STATUS: {}, fmt: (x) => x };
+        const all = incRows || [];
+        const cnt = (st) => all.filter((r) => r.status === st).length;
+        const open = all.filter((r) => r.status !== 'done');
+        const go = () => { state.menu = 'incident'; window.APP.reload(); };
+        const tile = (n, label, cls) => el('div', { class: 'itile ' + cls }, el('b', {}, String(n)), el('span', {}, label));
+        return el('div', { class: 'card inccard' + (open.length ? ' hot' : '') },
+          el('div', { class: 'inchd' }, el('h2', {}, open.length ? `⚠ 이벤트 신고 · 미조치 ${open.length}건` : '이벤트 신고'),
+            el('button', { type: 'button', class: 'btn sm', onclick: go }, '신고하기')),
+          el('div', { class: 'itiles' }, tile(cnt('new'), '접수', 'new'), tile(cnt('doing'), '조치 중', 'doing'), tile(cnt('done'), '완료', 'done')),
+          open.length ? open.slice(0, 3).map((r) => el('button', { type: 'button', class: 'incl ' + r.status, onclick: go },
+            el('span', { class: 'ik' }, ((I.KINDS[r.kind] || { label: '' }).label).slice(0, 2)), el('b', {}, (r.types || []).join(' · ')),
+            el('small', {}, `${shortDiv(divName(r.division_id))} · ${r.place || '장소 미기재'} · ${I.fmt(r.occurred_at)}`),
+            el('em', {}, I.STATUS[r.status] || ''))) : el('p', { class: 'hint' }, all.length ? '미조치 신고가 없습니다' : '등록된 신고가 없습니다'),
+          open.length > 3 ? el('button', { type: 'button', class: 'incmore', onclick: go }, `나머지 ${open.length - 3}건 보기 ›`) : null);
+      })();
       body.replaceChildren(bar, incBanner, flip, head, tilesRow, flCard, lackCard, floorsCard, teamCard);
     };
     /* 상황판: 큰 글씨 전체화면, 30초마다 자동 갱신 */
@@ -568,7 +577,7 @@
         const basis = o.basis; const inB = (x) => basis.includes(x.shift);
         const lacks = shortages(divs, zones, rows, basis);
         const cards = divs.map((d) => {
-          const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const admN = (rosterRows || []).filter((r) => r.division_id === d.id && String(r.team || '').trim() === '행정' && r.checked && basis.includes(r.shift)).length; sm.sup += admN; const stfN = (staffRows || []).filter((x) => x.division_id === d.id && basis.includes(x.shift)).length; sm.total += admN + stfN; if (staffBucket === 'biz') sm.biz += stfN; else sm.sup += stfN; const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq);
+          const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const admN = (rosterRows || []).filter((r) => r.division_id === d.id && String(r.team || '').trim() === '행정' && r.checked && basis.includes(r.shift)).length; sm.sup += admN; const stfN = (staffRows || []).filter((x) => x.division_id === d.id && basis.includes(x.shift)).length; sm.total += admN + stfN; for (const x of (staffRows || []).filter((y) => y.division_id === d.id && basis.includes(y.shift))) { const b = x.zone_id ? (SUPZ.has(x.zone_id) ? 'sup' : 'biz') : staffBucket; if (b === 'biz') sm.biz += 1; else sm.sup += 1; } const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq);
           return el('div', { class: 'bcard ' + divTone(d.id) },
             el('div', { class: 'bname' }, shortDiv(d.name)),
             el('div', { class: 'bbig' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),
