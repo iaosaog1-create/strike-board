@@ -224,6 +224,71 @@
     return X.write([s1, s2, s3, s4]);
   }
 
+  /* ---- 관리자(관리자·총괄팀장·master) 이름 카드 출근 체크 + 구역 배치 + 관리자 현황 ---- */
+  const ST = { div: null, shift: null, zone: '' };
+  const ROLE_NAME = { master: '최고관리자', admin: '관리자', chief: '총괄팀장' };
+  async function staffPanel(body, redrawAll) {
+    const me = state.me; await O.ensureShifts();
+    const canEdit = me.role === 'master' || me.role === 'admin';
+    if (!S.date) S.date = O.today();
+    if (!ST.div) ST.div = (bizDivs().find((d) => d.id === me.division_id) || bizDivs()[0] || {}).id;
+    if (!ST.shift) ST.shift = O.basisFor(null)[0] || O.shiftList()[0];
+    body.replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
+    let rows = []; let zones = [];
+    try {
+      const [r, z] = await Promise.all([sb.rpc('staff_roster', { p_date: S.date }), sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active').eq('active', true)]);
+      if (r.error) throw r.error; rows = r.data || []; zones = z.data || [];
+    } catch (e) { body.replaceChildren(el('div', { class: 'card' }, el('h2', {}, '관리자 출근'), el('p', { class: 'hint' }, '불러오지 못했습니다. 14 SQL 실행 여부를 확인하세요'))); return; }
+    const zmap = new Map(zones.map((z) => [z.id, z]));
+    const zlabel = (id) => { const z = zmap.get(id); return z ? `${z.side} ${z.floor} ${O.zoneName(z)}` : '구역 미배치'; };
+    const draw = () => {
+      const zs = zones.filter((z) => z.division_id === ST.div).sort(O.zoneSort);
+      const zsel = el('select', { 'aria-label': '배치 구역' }, el('option', { value: '' }, '구역 선택 안 함'), ...zs.map((z) => el('option', { value: z.id }, `${z.side} ${z.floor} · ${O.zoneName(z)}`)));
+      zsel.value = ST.zone; zsel.addEventListener('change', () => { ST.zone = zsel.value; });
+      const dIn = el('input', { type: 'date', value: S.date, 'aria-label': '날짜' });
+      dIn.addEventListener('change', () => { if (dIn.value) { S.date = dIn.value; staffPanel(body, redrawAll); } });
+      const stepD = (n) => () => { S.date = O.addDays(S.date, n); staffPanel(body, redrawAll); };
+      const mark = async (r) => {
+        const same = r.checked && r.division_id === ST.div && r.shift === ST.shift && (r.zone_id || null) === (ST.zone ? Number(ST.zone) : null);
+        const on = !same;   // 같은 설정이면 취소, 다르면 저장·변경
+        const { error } = await sb.rpc('set_staff_checkin', { p_date: S.date, p_user: r.user_id, p_division: ST.div, p_shift: ST.shift, p_zone: ST.zone ? Number(ST.zone) : null, p_on: on });
+        if (error) return toast(errText(error), 'err');
+        Object.assign(r, on ? { checked: true, division_id: ST.div, shift: ST.shift, zone_id: ST.zone ? Number(ST.zone) : null } : { checked: false, division_id: null, shift: null, zone_id: null });
+        draw();
+      };
+      const cards = rows.map((r) => el('button', { type: 'button', class: 'pp gx' + (r.checked ? ' on' : ''), disabled: !canEdit, 'aria-pressed': String(!!r.checked), onclick: () => mark(r) },
+        el('b', {}, r.name), el('small', {}, r.checked ? `✔ ${shortDiv(divName(r.division_id))} ${r.shift}` : ROLE_NAME[r.role] || '')));
+      const on = rows.filter((r) => r.checked);
+      const byDiv = bizDivs().map((d) => [d, on.filter((r) => r.division_id === d.id)]).filter(([, l]) => l.length);
+      const top = el('div', { class: 'card' },
+        el('div', { class: 'datebar' }, el('button', { type: 'button', class: 'btn ghost sm', onclick: stepD(-1) }, '‹'), dIn,
+          el('button', { type: 'button', class: 'btn ghost sm', onclick: stepD(1) }, '›'),
+          el('button', { type: 'button', class: 'btn ghost sm', onclick: () => { S.date = O.today(); staffPanel(body, redrawAll); } }, '오늘')),
+        canEdit ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '① 근무 사업부'), seg(bizDivs().map((d) => [String(d.id), shortDiv(d.name)]), String(ST.div), (v) => { ST.div = Number(v); ST.zone = ''; draw(); })) : null,
+        canEdit ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '② 근무조'), seg(O.shiftList().map((x) => [x, x]), ST.shift, (v) => { ST.shift = v; draw(); })) : null,
+        canEdit ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '③ 배치 구역'), zsel) : null);
+      body.replaceChildren(top,
+        el('div', { class: 'ck-tiles' }, tile('대상', rows.length), tile('출근', on.length, 'ok'), tile('미출근', rows.length - on.length, rows.length - on.length ? 'mid' : ''), tile('구역 배치', on.filter((r) => r.zone_id).length)),
+        el('div', { class: 'card' }, el('h2', {}, '관리자 출근 체크'),
+          canEdit ? el('p', { class: 'hint' }, '근무 사업부·근무조·구역을 고른 뒤 이름을 누르세요. 같은 설정으로 다시 누르면 취소, 다른 설정이면 변경됩니다') : el('p', { class: 'hint' }, '조회만 가능합니다'),
+          el('div', { class: 'ppgrid' }, cards)),
+        el('div', { class: 'card' }, el('h2', {}, '관리자 현황'),
+          byDiv.length ? byDiv.map(([d, l]) => el('div', { class: 'f' }, el('span', { class: 'hint' }, `${d.name} · ${l.length}명`),
+            el('div', { class: 'ck-names' }, l.map((r) => el('span', { class: 'ck-chip gx' }, r.name, el('small', {}, `${r.shift}${r.zone_id ? ' · ' + zlabel(r.zone_id) : ' · 구역 미배치'}`)))))) : el('p', { class: 'hint' }, '아직 출근 체크한 관리자가 없습니다'),
+          rows.length - on.length ? el('div', { class: 'f' }, el('span', { class: 'hint' }, `미출근 ${rows.length - on.length}명`), el('div', { class: 'ck-names' }, rows.filter((r) => !r.checked).map((r) => el('span', { class: 'ck-chip wait gx' }, r.name)))) : null,
+          el('p', { class: 'hint' }, '관리자 출근 인원은 현황에서 master가 정한 칸(지원 또는 근무)으로 집계됩니다')));
+    };
+    draw();
+  }
+  async function checkEntry(body) {
+    const r = state.me.role;
+    if (r === 'leader') return checkView(body);
+    const tabsBox = el('div'); const sub = el('div'); body.replaceChildren(tabsBox, sub);
+    const go = (v) => { S.mode = v; drawTabs(); if (v === 'staff') staffPanel(sub); else checkView(sub); };
+    const drawTabs = () => tabsBox.replaceChildren(seg([['team', '팀 출근 체크'], ['staff', '관리자 출근·현황']], S.mode || 'team', go));
+    drawTabs(); go(S.mode || 'team');
+  }
+
   window.APP.check = { rosterExcel, tally, isLeave, reason };
-  register('check', '출근 체크', ['leader', 'chief', 'admin', 'master'], checkView, '팀 직원 이름으로 출근 체크·구역 배치');
+  register('check', '출근 체크', ['leader', 'chief', 'admin', 'master'], checkEntry, '팀 직원 이름으로 출근 체크·구역 배치');
 })();
