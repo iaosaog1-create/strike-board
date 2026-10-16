@@ -620,7 +620,7 @@
         const oldSup = tilesRow.querySelector('.gsup');
         if (oldSup) { oldSup.className = 'gsup kpi7'; oldSup.replaceChildren(...[['정원', T.dq, ''], ['근무', T.biz, ''], ['휴무외', T.leave, ''], ['결근', T.ab, 'warn'], ['지원', T.sup, 'gl'], ['협정', T.coop, ''], ['투입', T.total, 'tot']].map(([n, v, c]) => el('div', c ? { class: c } : {}, el('b', {}, v == null ? '-' : `${v}`), el('small', {}, n)))); }
       }
-      flCard.append(el('p', { class: 'hint' }, '정원 = 사업부 전체 인원(휴무계획) · 근무 = 출근 인원 · 휴무외 = 연차·휴무·병가·보건휴가·휴직 등 · 결근 = 정원 − 근무 − 휴무외(파업 참여·출근 배치가 안 된 인원) · 계 = 근무+휴무외+결근 · 지원(경영본부·사업본부·행정 등)·협정은 사업부 인력이 아니라 정원에 포함되지 않음 · 투입 = 근무+지원+협정 · 비율 = 투입 ÷ 정원 · 층별 줄의 정원은 구역 필요 인원, 휴무외·결근·계는 합계 행에만 표시 · 팀원 / 팀 현장관리(팀장·조장)는 합계를 둘로 나눠 본 값'));
+      flCard.append(el('details', { class: 'hlp' }, el('summary', {}, '용어 설명 (눌러서 보기)'), el('p', { class: 'hint' }, '정원 = 사업부 전체 인원(휴무계획) · 근무 = 출근 인원 · 휴무외 = 연차·휴무·병가·보건휴가·휴직 등 · 결근 = 정원 − 근무 − 휴무외(파업 참여·출근 배치가 안 된 인원) · 계 = 근무+휴무외+결근 · 지원(경영본부·사업본부·행정 등)·협정은 사업부 인력이 아니라 정원에 포함되지 않음 · 투입 = 근무+지원+협정 · 비율 = 투입 ÷ 정원 · 층별 줄의 정원은 구역 필요 인원, 휴무외·결근·계는 합계 행에만 표시 · 팀원 / 팀 현장관리(팀장·조장)는 합계를 둘로 나눠 본 값')));
       // 부족 구역 강조
       const lacks = shortages(divs, zones, rows, basis, zInB);
       const lackSet = new Set(lacks.map((l) => l.zone.id));

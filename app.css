@@ -1064,3 +1064,50 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 /* 저장·알림 문구: 화면 가운데에 크게 */
 .toast{bottom:auto;top:42%;transform:translate(-50%,-50%);width:max-content;max-width:86vw;font-size:21px;font-weight:700;padding:22px 30px;border-radius:20px;text-align:center;word-break:keep-all;box-shadow:0 10px 30px rgba(0,0,0,.28);background:#1F7A5C}
 .toast.err{background:var(--danger)}
+
+/* ===== 현황 화면: 오른쪽 카드(부족 구역·이벤트 신고·인력 구분) 블루 계열 정리 ===== */
+:root{--nb:#1F66D1;--nb-ink:#10264A;--nb-sub:#5F7396;--nb-tile:#F1F6FD;--nb-line:#DCE6F5;--nb-red:#D6453B;--nb-grn:#1F9D70;--nb-amb:#D9962B}
+.lackcard,.lackcard.fine{border-left:1px solid var(--nb-line)}
+.lackcard h2{color:var(--nb-red);font-size:18px;margin-bottom:8px}.lackcard.fine h2{color:var(--nb-grn)}
+.lackrow{background:var(--nb-tile)!important;border:1px solid var(--nb-line);border-radius:14px}
+.lackrow .lk-dv{background:#DCE6F5;color:var(--nb)}
+.lackrow b{color:var(--nb-ink)}
+.lackrow .lk-n{color:var(--nb-sub)}.lackrow .lk-m{color:var(--nb-red);font-weight:800}
+.evc .evh h2,.unc .evh h2{font-size:18px;color:var(--nb-ink)}
+.evc .evk{background:var(--nb-tile);border:1px solid var(--nb-line);border-radius:14px;padding:10px 14px;display:grid;grid-template-columns:72px minmax(0,1fr);align-items:center;gap:6px}
+.evc .evk .evl{text-align:left;font-weight:800;color:var(--nb-ink);font-size:15px;margin:0}
+.evc .evk .evn{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;color:var(--nb-sub);font-size:12px}
+.evc .evk .evn b{display:block;font-size:24px;line-height:1.15}
+.evc .evk .n.new b{color:var(--nb-red)}.evc .evk .n.doing b{color:var(--nb-amb)}.evc .evk .n.done b{color:var(--nb-grn)}
+.evc.hot{border-color:#F2C2BD}
+.unc .untbl thead th{background:var(--nb-tile);color:var(--nb-sub)}
+.unc .untbl tr.sel{background:#E7EEF9}
+.unc .untbl b{color:var(--nb-ink)}
+.unc .untbl td.ust b{color:var(--nb-red)}
+@media (max-width:760px){.evc .evk{grid-template-columns:58px minmax(0,1fr);padding:8px 10px}.evc .evk .evn b{font-size:21px}}
+.evc .evk .evn{max-width:440px}
+
+/* 폰: 근무 현황 카드 균형 — 게이지는 가운데 위에, 숫자 7칸은 4칸 + 3칸으로 가지런히 */
+@media (max-width:760px){
+  .gcard{grid-template-columns:minmax(0,1fr);row-gap:10px}
+  .gcard>h2{grid-column:1}
+  .gcard>.gauge{grid-column:1;grid-row:auto;margin:2px auto 0;width:200px;height:106px}
+  .gcard .gauge .arc{width:200px;height:200px}
+  .gcard .gauge .gin{left:24px;top:24px;width:152px;height:152px}
+  .gcard .gtx b{font-size:26px}.gcard .gtx small{font-size:12px}
+  .gcard>.gsup{grid-column:1;grid-row:auto}
+  .gcard>.sumwrap,.gcard>.tblwrap{grid-column:1;grid-row:auto}
+  .gcard .gsup.kpi7{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .gcard .gsup.kpi7 div{padding:9px 2px}
+  .gcard .gsup.kpi7 b{font-size:20px}.gcard .gsup.kpi7 small{font-size:12px}
+  .gcard .gsup.kpi7 .tot{grid-column:span 2}.gcard .gsup.kpi7 .tot b{font-size:22px}
+}
+@media (max-width:760px){.homepair .evc .evg{grid-template-columns:minmax(0,1fr)}.evc .evk .evn{max-width:none}}
+
+/* 긴 설명 글은 접어 두기 */
+.hlp{margin-top:10px;border-top:1px solid #DCE6F5;padding-top:4px}
+.hlp summary{cursor:pointer;color:var(--teal);font-weight:800;padding:8px 2px;list-style:none;font-size:15px}
+.hlp summary::-webkit-details-marker{display:none}
+.hlp summary:before{content:"?";display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;background:var(--teal);color:#fff;font-size:14px}
+.hlp[open] summary{margin-bottom:2px}
+@media (max-width:760px){.evc .evk{grid-template-columns:80px minmax(0,1fr)}.evc .evk .evl{white-space:nowrap}}
