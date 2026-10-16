@@ -1111,3 +1111,55 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .hlp summary:before{content:"?";display:inline-grid;place-items:center;width:22px;height:22px;margin-right:8px;border-radius:50%;background:var(--teal);color:#fff;font-size:14px}
 .hlp[open] summary{margin-bottom:2px}
 @media (max-width:760px){.evc .evk{grid-template-columns:80px minmax(0,1fr)}.evc .evk .evl{white-space:nowrap}}
+
+/* ===== 상황판: 라이트(블루) / 다크 두 가지 모드 (상황실 배치) ===== */
+.board{--bg:#EAF1FB;--card:#fff;--tile:#F1F6FD;--line:#DCE6F5;--ink:#10264A;--sub:#5F7396;--blue:#1F66D1;--teal:#0E9AA7;--amb:#D9962B;--red:#D6453B;--grn:#1F9D70;--ring:#DCE6F5;background:var(--bg);color:var(--ink);gap:16px}
+.board.dark{--bg:#0C1424;--card:#141F36;--tile:#101A2E;--line:#22314F;--ink:#fff;--sub:#8FA0BD;--blue:#6FB1FF;--teal:#2FD0C2;--amb:#F2B84B;--red:#FF7A6B;--grn:#4BE0A5;--ring:#22314F}
+.board .bhead b{color:var(--ink);font-size:32px}.board .bhead span{color:var(--sub);font-size:20px}.board .bclock{color:var(--blue);font-size:48px}
+.bhead .bth{width:auto;margin:0;min-height:56px;padding:0 22px;font-size:19px;white-space:nowrap}
+.board.dark .btn.ghost{background:var(--card);color:var(--ink);border-color:#3A4D73}
+.bd-card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:22px 26px;box-shadow:0 4px 16px rgba(31,102,209,.08)}
+.board.dark .bd-card{box-shadow:none}
+.bd-card h2{margin:0 0 12px;font-size:22px;font-weight:600;color:var(--sub)}
+.bd-top{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px}
+.bd-don{display:grid;place-items:center}
+.bd-ring{--c:var(--blue);width:220px;height:220px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) 0 var(--a),var(--ring) var(--a) 360deg)}
+.bd-ring.mid{--c:var(--amb)}.bd-ring.low{--c:var(--red)}
+.bd-rin{width:168px;height:168px;border-radius:50%;background:var(--card);display:grid;place-content:center;text-align:center}
+.bd-rin b{font-size:52px;color:var(--ink);line-height:1.05}.bd-rin small{font-size:18px;color:var(--sub)}
+.bd-kp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-content:center}
+.bd-k{background:var(--tile);border:1px solid var(--line);border-radius:18px;padding:16px 18px}
+.bd-k b{display:block;font-size:50px;line-height:1.1;color:var(--ink)}.bd-k span{color:var(--sub);font-size:19px}
+.bd-k.b b{color:var(--blue)}.bd-k.g b{color:var(--grn)}.bd-k.r b{color:var(--red)}
+.bd-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px}
+.bd-dr{display:grid;grid-template-columns:64px minmax(0,1fr) 130px 64px 90px;gap:14px;align-items:center;padding:14px 0}
+.bd-dr>b{font-size:26px;color:var(--blue)}.bd-dr.dv-t2>b{color:var(--teal)}.bd-dr.dv-bd>b{color:var(--amb)}
+.bd-bar{height:20px;background:var(--ring);border-radius:11px;overflow:hidden}.bd-bar u{display:block;height:100%;border-radius:11px;background:var(--blue)}
+.bd-dr.dv-t2 .bd-bar u{background:var(--teal)}.bd-dr.dv-bd .bd-bar u{background:var(--amb)}.bd-bar u.low{background:var(--red)!important}
+.bd-v{font-size:34px;font-weight:700;text-align:right}.bd-v small{font-size:19px;color:var(--sub);font-weight:400}
+.bd-p{font-size:22px;font-weight:700}.bd-p.low{color:var(--red)}.bd-a{color:var(--red);font-size:19px}
+.bd-lr{display:grid;grid-template-columns:56px minmax(0,1fr) 80px 70px;gap:12px;align-items:center;padding:13px 0;border-top:1px solid var(--line);font-size:22px}
+.bd-lr em{font-style:normal;background:var(--line);border-radius:9px;text-align:center;font-size:17px;padding:3px 0}
+.bd-lr b{color:var(--sub);font-weight:500;text-align:right}.bd-lr strong{color:var(--red);font-size:26px;text-align:right}
+.bd-ok{color:var(--grn);font-size:22px}
+.bd-e{display:grid;grid-template-columns:110px repeat(3,minmax(0,1fr));align-items:center;background:var(--tile);border-radius:16px;padding:14px 18px;margin-bottom:12px;text-align:center}
+.bd-e h3{margin:0;font-size:21px;text-align:left;font-weight:600}.bd-e b{display:block;font-size:42px;line-height:1.1}.bd-e span{font-size:16px;color:var(--sub)}
+.bd-e b.new{color:var(--red)}.bd-e b.doing{color:var(--amb)}.bd-e b.done{color:var(--grn)}
+.bd-un{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.bd-u{background:var(--tile);border-radius:18px;padding:18px}.bd-u h3{margin:0 0 4px;font-size:21px;font-weight:500;color:var(--sub)}
+.bd-u b{font-size:52px;white-space:nowrap}.bd-u b small{font-size:22px;color:var(--sub);font-weight:400}
+.bd-u.m b{color:var(--red)}.bd-u.h b{color:var(--blue)}.bd-u.n b{color:var(--grn)}.bd-u span{display:block;font-size:17px;color:var(--sub)}
+.bd-note{margin:12px 0 0;color:var(--sub);font-size:17px}
+@media (max-width:900px){.bd-top,.bd-row{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:700px){
+ .board{gap:10px}.board .bhead b{font-size:17px}.board .bhead span{font-size:12px}.board .bclock{font-size:24px}.bhead .bth{min-height:34px;font-size:12px;padding:0 10px}
+ .bd-card{padding:12px 14px;border-radius:16px}.bd-card h2{font-size:14px;margin-bottom:6px}
+ .bd-top{grid-template-columns:112px minmax(0,1fr);gap:8px}.bd-top .bd-card{padding:8px}
+ .bd-ring{width:96px;height:96px}.bd-rin{width:70px;height:70px}.bd-rin b{font-size:20px}.bd-rin small{font-size:11px}
+ .bd-kp{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.bd-k{padding:6px 8px;border-radius:12px}.bd-k b{font-size:21px}.bd-k span{font-size:12px}
+ .bd-dr{grid-template-columns:36px minmax(0,1fr) 70px 38px;gap:8px;padding:8px 0}.bd-dr>b{font-size:15px}.bd-bar{height:11px}.bd-v{font-size:18px}.bd-v small{font-size:11px}.bd-p{font-size:13px}.bd-a{display:none}
+ .bd-lr{grid-template-columns:36px minmax(0,1fr) 44px;font-size:14px;padding:8px 0}.bd-lr em{font-size:12px}.bd-lr b{display:none}.bd-lr strong{font-size:16px}
+ .bd-e{grid-template-columns:70px repeat(3,minmax(0,1fr));padding:8px}.bd-e h3{font-size:13px}.bd-e b{font-size:22px}.bd-e span{font-size:11px}
+ .bd-un{gap:6px}.bd-u{padding:10px 8px}.bd-u h3{font-size:13px}.bd-u b{font-size:24px}.bd-u b small{font-size:11px}.bd-u span{font-size:11px}
+}
+.bd-row.one{grid-template-columns:minmax(0,1fr)}

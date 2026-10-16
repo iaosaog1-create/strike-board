@@ -667,7 +667,8 @@
     };
     /* 상황판: 큰 글씨 전체화면, 30초마다 자동 갱신 */
     function openBoard() {
-      const box = el('div', { class: 'board', role: 'dialog', 'aria-label': '상황판' });
+      let dark = false; try { dark = localStorage.getItem('boardTheme') === 'dark'; } catch (e) { /* 저장소를 못 쓰면 라이트 */ }
+      const box = el('div', { class: 'board' + (dark ? ' dark' : ''), role: 'dialog', 'aria-label': '상황판' });
       document.body.append(box); document.body.classList.add('boardon');
       try { if (box.requestFullscreen) box.requestFullscreen().catch(() => {}); } catch (e) { /* 무시 */ }
       let timer = null;
@@ -697,35 +698,42 @@
         const L = divs.map(calc);
         const T = L.reduce((t, x) => ({ total: t.total + x.sm.total, biz: t.biz + x.sm.biz, sup: t.sup + x.sm.sup, coop: t.coop + x.sm.coop, q: t.q + x.qq, lv: t.lv + x.lv, ab: t.ab + x.ab }), { total: 0, biz: 0, sup: 0, coop: 0, q: 0, lv: 0, ab: 0 });
         const tp = pct(T.total, T.q);
-        const hero = el('div', { class: 'bhero' },
-          el('div', { class: 'hl' }, el('div', { class: 'bname' }, '환경미화 전체 투입 현황 (근무+지원+협정)'),
-            el('div', { class: 'bbig' }, String(T.total), el('small', {}, `명 / 정원 ${T.q || '-'}명`))),
-          el('div', { class: 'hr' }, el('div', { class: 'bpct pc ' + tone(tp) }, tp == null ? '-' : tp + '%'),
-            el('div', { class: 'hbar w' + (Math.round(Math.min(100, tp || 0) / 5) * 5) }, el('i', { class: 'f ' + tone(tp) })),
-            el('div', { class: 'hsub' }, el('span', {}, '근무 ', el('b', {}, String(T.biz))), el('span', {}, '휴무외 ', el('b', {}, String(T.lv))), el('span', {}, '결근 ', el('b', { class: 'hab' }, String(T.ab))), el('span', { class: 'hgap' }, '지원 ', el('b', {}, String(T.sup))), el('span', {}, '협정 ', el('b', {}, String(T.coop))))));
-        const cards = L.map(({ d, sm, qq, lv, ab, p }) => el('div', { class: 'bcard ' + divTone(d.id) },
-          el('div', { class: 'bname' }, shortDiv(d.name)),
-          el('div', { class: 'bbig' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),
-          el('div', { class: 'bpct pc ' + tone(p) }, p == null ? '-' : p + '%'),
-          el('div', { class: 'bsub' }, `근무 ${sm.biz} · 휴무외 ${lv} · 결근 ${ab}`), el('div', { class: 'bsub' }, `지원 ${sm.sup} · 협정 ${sm.coop}`)));
-        const evCell = (k, div) => { const c = incCnt(k, div); return el('td', {}, el('span', { class: 'n new' }, '접수 ', el('b', {}, String(c.new))), el('span', { class: 'n doing' }, '조치 ', el('b', {}, String(c.doing))), el('span', { class: 'n done' }, '완료 ', el('b', {}, String(c.done)))); };
-        const evRow = (name, div, cls) => el('tr', { class: cls || '' }, el('th', { scope: 'row' }, name), ...KIND_L.map(([k]) => evCell(k, div)));
-        const evCard = el('div', { class: 'black bsec' }, el('h2', {}, '이벤트 (불법행위 · 업무방해)'),
-          el('table', { class: 'btbl' }, el('thead', {}, el('tr', {}, el('th', {}, '구분'), ...KIND_L.map(([, l]) => el('th', {}, l)))),
-            el('tbody', {}, ...divs.map((d) => evRow(shortDiv(d.name), d.id)), divs.length > 1 ? evRow('전체', null, 'tot') : null)));
-        let unCard = null;
+        // 부족 구역 (홈 화면과 같은 기준)
+        const tShiftB = (z) => { const r = z.team ? (tsRows || []).find((x) => x.division_id === z.division_id && tnumO(x.team) === tnumO(z.team)) : null; return r ? r.shift : null; };
+        const zInBB = (z) => { const sh = tShiftB(z); return !sh || basis.includes(sh); };
+        const lacks = shortages(divs, zones, rows, basis, zInBB);
+        const tone2 = tone(tp);
+        const donut = el('div', { class: 'bd-card bd-don' }, el('div', { class: 'bd-ring ' + tone2, style: `--a:${Math.min(100, tp || 0) * 3.6}deg` }, el('div', { class: 'bd-rin' }, el('b', {}, tp == null ? '-' : tp + '%'), el('small', {}, '투입률'))));
+        const K = [['투입 인원', T.total, 'b'], ['정원', T.q || '-', ''], ['근무', T.biz, 'g'], ['결근', T.ab, 'r'], ['휴무외', T.lv, ''], ['지원', T.sup, ''], ['협정', T.coop, ''], ['부족 구역', lacks.length, lacks.length ? 'r' : 'g']];
+        const kpi = el('div', { class: 'bd-card bd-kp' }, ...K.map(([n, v, c]) => el('div', { class: 'bd-k ' + c }, el('b', {}, String(v)), el('span', {}, n))));
+        const divCard = el('div', { class: 'bd-card' }, el('h2', {}, '사업부별 투입률'),
+          ...L.map(({ d, sm, qq, ab, p }) => { const t = tone(p);
+            return el('div', { class: 'bd-dr ' + divTone(d.id) }, el('b', {}, shortDiv(d.name)),
+              el('div', { class: 'bd-bar' }, el('u', { class: t, style: `width:${Math.min(100, p || 0)}%` })),
+              el('span', { class: 'bd-v' }, String(sm.total), el('small', {}, `/${qq || '-'}`)), el('span', { class: 'bd-p ' + t }, p == null ? '-' : p + '%'),
+              el('span', { class: 'bd-a' }, ab ? `결근 ${ab}` : '')); }));
+        const lackCardB = el('div', { class: 'bd-card' }, el('h2', {}, lacks.length ? `부족 구역 ${lacks.length}곳` : '모든 구역 충족'),
+          lacks.length ? el('div', { class: 'bd-lk' }, lacks.slice(0, 8).map((l) => el('div', { class: 'bd-lr' }, el('em', {}, shortDiv(l.div.name)), el('span', {}, `${l.zone.side} ${l.zone.floor} · ${zoneName(l.zone)}`), el('b', {}, `${l.total}/${l.need}`), el('strong', {}, `-${l.lack}`))))
+            : el('p', { class: 'bd-ok' }, '필요 인원 이상 배치된 상태입니다'));
+        const evB = el('div', { class: 'bd-card' }, el('h2', {}, '이벤트 신고'),
+          ...KIND_L.map(([k, label]) => { const c = incCnt(k); return el('div', { class: 'bd-e' }, el('h3', {}, label),
+            el('div', {}, el('b', { class: 'new' }, String(c.new)), el('span', {}, '접수')), el('div', {}, el('b', { class: 'doing' }, String(c.doing)), el('span', {}, '조치 중')), el('div', {}, el('b', { class: 'done' }, String(c.done)), el('span', {}, '완료'))); }));
+        let unB = null;
         if (unionRows != null) {
-          const row = (name, ids, cls) => { const a = uAgg(ids); const u = uSum(a); const pc = (k) => el('td', {}, el('b', {}, String(a[k].present)), el('small', {}, ` / ${a[k].total}`));
-            return el('tr', { class: cls || '' }, el('th', { scope: 'row' }, name), pc('민노'), pc('한마음'), pc('비노조'), el('td', { class: 'ust' }, el('b', {}, String(u.absent)), u.pending ? el('small', {}, ` (확인중 ${u.pending})`) : null), el('td', { class: 'urt' }, u.rate == null ? '-' : u.rate + '%')); };
-          unCard = el('div', { class: 'black bsec' }, el('h2', {}, '노조현황'),
-            el('table', { class: 'btbl' }, el('thead', {}, el('tr', {}, ...['구분', '민노', '한마음', '비노조', '파업 참여', '참여율'].map((h) => el('th', {}, h)))),
-              el('tbody', {}, ...divs.map((d) => row(shortDiv(d.name), [d.id])), divs.length > 1 ? row('전체', divs.map((d) => d.id), 'tot') : null)),
-            el('p', { class: 'bnote' }, '출근 인원 / 조합원 · 파업 참여 = 근무 예정 조합원 중 미출근 · 참여율 = 근무 예정 조합원 대비'));
+          const a = uAgg(divs.map((d) => d.id)); const us = uSum(a);
+          unB = el('div', { class: 'bd-card' }, el('h2', {}, '비정상상황 인력 구분 (출근 / 조합원)'),
+            el('div', { class: 'bd-un' }, ...[['민노', 'm'], ['한마음', 'h'], ['비노조', 'n']].map(([k, c]) => el('div', { class: 'bd-u ' + c }, el('h3', {}, k), el('b', {}, String(a[k].present), el('small', {}, ` / ${a[k].total}`)),
+              el('span', {}, k === '비노조' ? '정상 근무' : `파업 참여 ${a[k].absent}명`)))),
+            el('p', { class: 'bd-note' }, `파업 참여 합계 ${us.absent}명 · 참여율 ${us.rate == null ? '-' : us.rate + '%'}`));
         }
         box.replaceChildren(
-          el('div', { class: 'bhead' }, el('div', {}, el('b', {}, 'IAOS 비정상상황 근무 현황'), el('span', {}, `${dateLabel(o.date)} · 기준 ${basis.join('·')}`)),
-            el('div', { class: 'bclock' }, clockTxt()), el('button', { type: 'button', class: 'btn ghost', onclick: close }, '닫기 (Esc)')),
-          hero, el('div', { class: 'bcards' }, cards), evCard, unCard);
+          el('div', { class: 'bhead' }, el('div', {}, el('b', {}, 'IAOS 비정상상황 상황실'), el('span', {}, `${dateLabel(o.date)} · 기준 ${basis.join('·')}`)),
+            el('div', { class: 'bclock' }, clockTxt()),
+            el('button', { type: 'button', class: 'btn ghost bth', 'aria-pressed': String(dark), onclick: (e) => { dark = !dark; box.classList.toggle('dark', dark); try { localStorage.setItem('boardTheme', dark ? 'dark' : 'light'); } catch (x) { /* 무시 */ } e.currentTarget.textContent = dark ? '라이트 모드' : '다크 모드'; e.currentTarget.setAttribute('aria-pressed', String(dark)); } }, dark ? '라이트 모드' : '다크 모드'),
+            el('button', { type: 'button', class: 'btn ghost', onclick: close }, '닫기 (Esc)')),
+          el('div', { class: 'bd-top' }, donut, kpi),
+          el('div', { class: 'bd-row' }, divCard, lackCardB),
+          el('div', { class: 'bd-row' + (unB ? '' : ' one') }, evB, unB));
       };
       const load = async () => {
         try {
