@@ -1020,3 +1020,27 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
   .flipboard .fchips{grid-column:1/-1}
   .flipboard .fq b{font-size:22px}.flipboard .fq small{font-size:16px}
 }
+
+/* 팀 담당구역 · 팀 간 지원 */
+.pp.sup{box-shadow:inset 0 0 0 3px #2563eb}
+.pp.sup small{color:#1d4ed8;font-weight:700}
+.zact select{min-height:48px;padding:6px 8px;font-size:17px;max-width:110px}
+.tbl td.sp.out{color:#b45309;font-weight:700}
+.tbl td.sp.in{color:#1d4ed8;font-weight:700}
+.zact{flex-wrap:wrap;justify-content:flex-end}
+.zact .btn{white-space:nowrap}
+
+/* 휴무 변경 표시 */
+.pp.chg{box-shadow:inset 0 0 0 3px #f59e0b}
+.pp.chg small{color:#b45309;font-weight:700}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+
+/* PC: 하단탭 → 오른쪽 고정 세로 메뉴 */
+@media (min-width:900px){
+  .shell:has(>.menu:not(.solo)){max-width:1360px;grid-template-columns:minmax(0,1fr) 168px;align-items:start;column-gap:20px;padding-bottom:30px}
+  .shell:has(>.menu:not(.solo))>div{grid-column:1;grid-row:1;min-width:0}
+  .menu:not(.solo){position:sticky;top:76px;left:auto;right:auto;bottom:auto;transform:none;width:auto;grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:4px;padding:8px;border-radius:16px;box-shadow:0 2px 14px rgba(20,40,70,.12);max-height:calc(100vh - 96px);overflow:auto;z-index:9}
+  .menu:not(.solo) button{flex-direction:row;justify-content:flex-start;gap:10px;min-height:46px;padding:6px 10px;font-size:14px;text-align:left;width:100%}
+  .menu:not(.solo) button .ic svg{width:22px;height:22px}
+  .menu:not(.solo) .cnt{position:static;margin-left:auto}
+}

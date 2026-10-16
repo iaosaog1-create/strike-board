@@ -44,10 +44,11 @@
     body.replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
     let all, zones;
     try {
-      [all, zones, S.ts] = await Promise.all([
+      [all, zones, S.ts, S.sup] = await Promise.all([
         q(sb.rpc('team_roster', { p_date: S.date, p_team: null })),
-        q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active')),
-        sb.from('team_shift').select('division_id,team,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => [])]);
+        q(sb.from('zones').select('id,division_id,side,floor,area,team,label,task,required,active')),
+        sb.from('team_shift').select('division_id,team,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => []),
+        sb.rpc('list_team_support', { p_date: S.date }).then((r) => (r.error ? [] : r.data || []), () => [])]);
     } catch (e) { body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 08·09 SQL 실행 여부를 확인하세요')); return; }
 
     if (me.role === 'leader' && !me.plan_team) {
@@ -56,7 +57,16 @@
     }
     const zmap = new Map(zones.map((z) => [z.id, z]));
     const zoneShort = (id) => { const z = zmap.get(id); return z ? String(O.zoneName(z)).split('·').pop().trim() : '구역'; };
+    const zoneBrief = (id) => { const z = zmap.get(id); return z ? (z.area === '전체' ? z.floor : `${z.floor} ${z.area}`) : '구역'; };
     const zoneLabel = (id) => { const z = zmap.get(id); return z ? `${z.floor} ${O.zoneName(z)}` : '구역 미배치'; };
+    /* 팀 담당구역: 팀장 화면에는 내 팀 구역 + 공통 구역(현장지원)만 */
+    const hasTeamZones = zones.some((z) => z.division_id === S.division && z.active && z.team);
+    const teamZones = (team) => zones.filter((z) => z.division_id === S.division && z.active && z.team && tnum(z.team) === tnum(team)).sort(O.zoneSort);
+    const myZones = () => (hasTeamZones ? [...teamZones(S.team), ...zones.filter((z) => z.division_id === S.division && z.active && !z.team && z.task !== '관리자').sort(O.zoneSort)]
+      : zones.filter((z) => z.division_id === S.division && z.active).sort(O.zoneSort));
+    const supAll = (S.sup || []).filter((s) => s.division_id === S.division);
+    const supOut = new Map(supAll.filter((s) => tnum(s.from_team) === tnum(S.team)).map((s) => [s.emp_no, s]));
+    const supIn = supAll.filter((s) => tnum(s.to_team) === tnum(S.team));
     const divRows = all.filter((r) => r.division_id === S.division);
     const teams = [...new Set(divRows.map((r) => r.team || '미지정'))].sort(sortTeam);
     if (me.role !== 'leader' && (!S.team || !teams.some((t) => tnum(t) === tnum(S.team)))) S.team = teams[0] || null;
@@ -77,7 +87,7 @@
       me.role !== 'leader' && teams.length && S.tab !== 'progress'
         ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '팀'), seg(teams.map((t) => [t, t]), teams.find((t) => tnum(t) === tnum(S.team)), (v) => { S.team = v; S.mark = null; redraw(); })) : null);
 
-    const tabs = seg(me.role === 'leader' ? [['check', '출근 체크'], ['status', '내 팀 현황'], ['gender', '성별 설정']] : [['progress', '진행 현황'], ['check', '팀 체크'], ['status', '팀 현황'], ['gender', '성별 설정']], S.tab, (v) => { S.tab = v; redraw(); });
+    const tabs = seg(me.role === 'leader' ? [['check', '출근 체크'], ['support', '팀 지원'], ['status', '내 팀 현황'], ['gender', '성별 설정']] : [['progress', '진행 현황'], ['check', '팀 체크'], ['support', '팀 지원'], ['status', '팀 현황'], ['gender', '성별 설정']], S.tab, (v) => { S.tab = v; redraw(); });
 
     if (!all.length) {
       body.replaceChildren(tabs, top, el('div', { class: 'card' }, el('p', { class: 'empty' }, '휴무계획이 없습니다. 휴무 업로드에서 휴무계획 엑셀을 먼저 올려 주세요.')));
@@ -109,6 +119,68 @@
 
     if (!teamRows.length) { body.replaceChildren(tabs, top, el('div', { class: 'card' }, el('p', { class: 'empty' }, '이 팀의 명단이 없습니다.'))); return; }
 
+    /* ---- 팀 지원: 남는 팀 → 부족한 팀 (같은 사업부) ---- */
+    function supCards() {
+      const cards = [];
+      if (supOut.size) cards.push(el('div', { class: 'card' }, el('h2', {}, `${S.team} → 다른 팀 지원 ${supOut.size}명`),
+        el('div', { class: 'ck-names' }, [...supOut.values()].map((s) => el('span', { class: 'ck-chip on gx' }, s.name, el('small', {}, `${s.to_team} · ${zoneBrief(s.zone_id)}`))))));
+      if (supIn.length) cards.push(el('div', { class: 'card' }, el('h2', {}, `${S.team} ← 다른 팀 지원 ${supIn.length}명`),
+        el('div', { class: 'ck-names' }, supIn.map((s) => el('span', { class: 'ck-chip on gx' }, s.name, el('small', {}, `${s.from_team} · ${zoneBrief(s.zone_id)}`))))));
+      return cards.length ? cards : null;
+    }
+    if (S.tab === 'support') {
+      const toTeams = [...new Set(zones.filter((z) => z.division_id === S.division && z.active && z.team && tnum(z.team) !== tnum(S.team)).map((z) => z.team))].sort(sortTeam);
+      const sk = key + '|sup';
+      if (S.skey !== sk) { S.skey = sk; S.smap = new Map([...supOut.values()].map((s) => [s.emp_no, { to_team: s.to_team, zone_id: s.zone_id }])); S.sZone = ''; }
+      if (!S.sTo || !toTeams.includes(S.sTo)) { S.sTo = toTeams[0] || ''; S.sZone = ''; }
+      const drawSup = () => {
+        const tz = S.sTo ? teamZones(S.sTo) : [];
+        if (!tz.some((z) => String(z.id) === String(S.sZone))) S.sZone = tz[0] ? String(tz[0].id) : '';
+        const zsel = el('select', { 'aria-label': '지원 갈 구역' }, ...tz.map((z) => el('option', { value: z.id }, `${z.side} ${z.floor} · ${O.zoneName(z)}`)));
+        zsel.value = S.sZone; zsel.addEventListener('change', () => { S.sZone = zsel.value; });
+        const tap = (r) => () => {
+          const cur = S.smap.get(r.emp_no); const zid = Number(S.sZone);
+          if (!S.sTo || !zid) return toast('받는 팀과 구역을 먼저 고르세요', 'err');
+          if (cur && cur.to_team === S.sTo && cur.zone_id === zid) S.smap.delete(r.emp_no); else S.smap.set(r.emp_no, { to_team: S.sTo, zone_id: zid });
+          drawSup();
+        };
+        const people = teamRows.map((r) => {
+          const leave = isLeave(r); const a = S.smap.get(r.emp_no);
+          return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + (leave ? ' leave' : a ? ' on sup' : ''), disabled: leave, 'aria-pressed': String(!!a), onclick: tap(r) },
+            el('b', {}, r.name), el('small', {}, leave ? reason(r) : a ? `→ ${a.to_team} ${zoneBrief(a.zone_id)}` : r.checked ? '출근' : ''));
+        });
+        const save = el('button', { class: 'btn', type: 'button' }, `지원 저장 (${S.smap.size}명)`);
+        save.addEventListener('click', busy(save, async () => {
+          const out = [...S.smap.entries()].map(([emp_no, v]) => ({ emp_no, to_team: v.to_team, zone_id: v.zone_id }));
+          const { error } = await sb.rpc('set_team_support', { p_date: S.date, p_division: S.division, p_from_team: S.team, p_rows: out });
+          if (error) return toast(errText(error), 'err');
+          // 이미 출근 체크된 사람은 받는 팀 구역으로 바로 옮기고, 해제된 사람은 구역을 비움
+          const base = new Map(teamRows.filter((r) => r.checked).map((r) => [r.emp_no, r.zone_id || 0])); let changed = false;
+          for (const [emp, v] of S.smap) if (base.has(emp) && base.get(emp) !== v.zone_id) { base.set(emp, v.zone_id); changed = true; }
+          for (const [emp, zid] of base) if (!S.smap.has(emp) && zid) { const z = zmap.get(zid); if (z && z.team && tnum(z.team) !== tnum(S.team)) { base.set(emp, 0); changed = true; } }
+          if (changed) {
+            const rows2 = [...base.entries()].map(([emp_no, zid]) => ({ emp_no, zone_id: zid || null }));
+            const r2 = await sb.rpc('save_team_check', { p_date: S.date, p_division: S.division, p_team: S.team, p_rows: rows2, p_close: teamRows.some((r) => r.closed) });
+            if (r2.error) return toast(errText(r2.error), 'err');
+          }
+          toast(out.length ? `${out.length}명의 팀 지원을 저장했습니다` : '팀 지원을 모두 해제했습니다');
+          S.key = ''; S.mark = null; S.skey = ''; redraw();
+        }));
+        body.replaceChildren(tabs, top,
+          el('div', { class: 'card' }, el('h2', {}, `${S.team} 인원 지원 보내기`),
+            toTeams.length ? [
+              el('div', { class: 'f' }, el('span', { class: 'hint' }, '① 받는 팀 (인력이 부족한 팀)'), seg(toTeams.map((t) => [t, t]), S.sTo, (v) => { S.sTo = v; S.sZone = ''; drawSup(); })),
+              el('label', { class: 'f' }, el('span', {}, '② 지원 갈 구역'), zsel),
+              el('div', { class: 'f' }, el('span', { class: 'hint' }, '③ 보낼 사람 이름을 누르세요 (같은 곳으로 다시 누르면 해제, 다른 팀·구역을 고르고 누르면 변경)'), el('div', { class: 'ppgrid' }, people))]
+              : el('p', { class: 'hint' }, '받을 수 있는 다른 팀 구역이 없습니다. 구역·정원 설정에서 팀별 구역을 먼저 등록하세요.'),
+            el('p', { class: 'hint' }, '지원 간 사람은 우리 팀 출근자로 남고, 받는 팀 구역에서 근무하는 것으로 집계됩니다. 사업부 전체 인원은 늘거나 줄지 않습니다.')),
+          supIn.length ? el('div', { class: 'card' }, el('h2', {}, `우리 팀으로 오는 지원 ${supIn.length}명`),
+            el('div', { class: 'ck-names' }, supIn.map((s) => el('span', { class: 'ck-chip on gx' }, s.name, el('small', {}, `${s.from_team} · ${zoneBrief(s.zone_id)}`))))) : null,
+          el('div', { class: 'actions' }, save));
+      };
+      drawSup(); return;
+    }
+
     /* ---- 팀 현황 (읽기) ---- */
     if (S.tab === 'status') {
       const k = tally(teamRows);
@@ -123,6 +195,7 @@
       body.replaceChildren(tabs, top,
         el('div', { class: 'ck-tiles' }, tile('정원', k.total), tile('근태', k.leave), tile('출근', k.present, 'ok'), tile(k.closed ? '결근' : '미확인', k.rest, k.closed ? 'low' : 'mid')),
         el('p', { class: 'ck-gline' }, `출근  ${gline(k)}`),
+        supCards(),
         el('div', { class: 'card' }, el('h2', {}, `${S.team} 출근 ${k.present}명`), el('p', { class: 'hint' }, gline(k)), zoneBlocks.length ? zoneBlocks : el('p', { class: 'hint' }, '아직 체크한 사람이 없습니다')),
         el('div', { class: 'card' }, el('h2', {}, k.closed ? `결근 ${k.rest}명` : `미확인 ${k.rest}명`),
           k.closed ? null : el('p', { class: 'hint' }, '"출근 체크 완료"를 누르면 아래 인원이 결근으로 확정됩니다.'),
@@ -159,24 +232,51 @@
     /* ---- 팀 체크 (입력) ---- */
     const draw = () => {
       const k = tally(teamRows, S.mark);
-      const zs = zones.filter((z) => z.division_id === S.division && z.active).sort(O.zoneSort);
+      const zs = myZones();
       const zSel = el('select', { 'aria-label': '배치할 구역' }, el('option', { value: '' }, '구역 선택 안 함 (출근만 체크)'),
         ...zs.map((z) => el('option', { value: z.id }, `${z.side} ${z.floor} · ${O.zoneName(z)}`)));
       zSel.value = S.zone;
       zSel.addEventListener('change', () => { S.zone = zSel.value; });
       const tap = (r) => () => {
-        const cur = S.mark.get(r.emp_no); const z = S.zone ? Number(S.zone) : 0;
+        const cur = S.mark.get(r.emp_no); const sp = supOut.get(r.emp_no); const z = sp ? sp.zone_id : S.zone ? Number(S.zone) : 0;   // 팀 지원으로 지정된 사람은 받는 팀 구역으로
         if (cur === undefined) S.mark.set(r.emp_no, z);
         else if (cur !== z) { S.mark.set(r.emp_no, z); toast(`${r.name}님 구역을 바꿨습니다`); }
         else S.mark.delete(r.emp_no);
         draw();
       };
-      const people = teamRows.map((r) => {
-        const leave = isLeave(r); const on = S.mark.has(r.emp_no);
-        const sub = leave ? reason(r) : on ? `✔ ${S.mark.get(r.emp_no) ? zoneShort(S.mark.get(r.emp_no)) : '출근'}` : (r.leave_kind === 'half' ? '반차' : '');
-        return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + (leave ? ' leave' : on ? ' on' : '') + (r.leave_kind === 'half' ? ' half' : ''), disabled: leave, 'aria-pressed': String(on), onclick: tap(r) },
+      /* 휴무 변경: 휴무인 사람 → 그날 출근 / 근무인 사람 → 그날 휴무 / 변경된 사람 → 취소 (그날 하루만 적용) */
+      const ovTap = (r) => async () => {
+        const mode = r.changed ? null : (isLeave(r) ? 'work' : 'off');
+        if (mode === 'work' && !window.confirm(`${r.name}님의 휴무(${reason(r)})를 오늘 출근으로 변경할까요?`)) return;
+        if (mode === 'off' && !window.confirm(`${r.name}님을 오늘 휴무로 변경할까요?`)) return;
+        const { error } = await sb.rpc('set_leave_override', { p_date: S.date, p_division: S.division, p_team: S.team, p_emp: r.emp_no, p_mode: mode });
+        if (error) return toast(errText(error), 'err');
+        const willLeave = mode === 'off' || (mode === null && r.changed === 'work');
+        if (willLeave) {
+          S.mark.delete(r.emp_no);
+          if (r.checked) {   // 이미 저장된 출근 체크에서 빼기
+            const rows2 = teamRows.filter((x) => x.checked && x.emp_no !== r.emp_no).map((x) => ({ emp_no: x.emp_no, zone_id: x.zone_id || null }));
+            const r2 = await sb.rpc('save_team_check', { p_date: S.date, p_division: S.division, p_team: S.team, p_rows: rows2, p_close: teamRows.some((x) => x.closed) });
+            if (r2.error) return toast(errText(r2.error), 'err');
+          }
+        }
+        toast(mode === 'work' ? `${r.name}님을 오늘 출근으로 변경했습니다` : mode === 'off' ? `${r.name}님을 오늘 휴무로 변경했습니다` : '휴무 변경을 취소했습니다');
+        redraw();
+      };
+      const card = (r) => {
+        const leave = isLeave(r); const on = S.mark.has(r.emp_no); const ov = !!S.ovMode;
+        const sp = supOut.get(r.emp_no);
+        const chg = r.changed === 'work' ? '변경 · 출근' : r.changed === 'off' ? '변경 · 휴무' : '';
+        const sub = leave ? (chg || reason(r)) : on ? `✔ ${S.mark.get(r.emp_no) ? (sp ? `${sp.to_team} 지원` : zoneShort(S.mark.get(r.emp_no))) : '출근'}` : sp ? `→ ${sp.to_team} 지원` : (chg || (r.leave_kind === 'half' ? '반차' : ''));
+        return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + (leave ? ' leave' : on ? ' on' : '') + (sp && !leave ? ' sup' : '') + (r.changed ? ' chg' : '') + (r.leave_kind === 'half' ? ' half' : ''), disabled: leave && !ov, 'aria-pressed': String(on), onclick: ov ? ovTap(r) : tap(r) },
           el('b', {}, r.name), el('small', {}, sub));
-      });
+      };
+      const leads = teamRows.filter((r) => r.is_lead); const mems = teamRows.filter((r) => !r.is_lead);
+      const people = leads.length ? [
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, `팀 현장관리 ${leads.length}명 (팀장·조장)`), el('div', { class: 'ppgrid' }, leads.map(card))),
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, `팀원 ${mems.length}명`), el('div', { class: 'ppgrid' }, mems.map(card)))] : el('div', { class: 'ppgrid' }, teamRows.map(card));
+      const lineOf = (list) => { const t = tally(list, S.mark); return `${t.present}/${t.total - t.leave}`; };
+      const ovBtn = el('button', { type: 'button', class: 'btn sm ' + (S.ovMode ? '' : 'ghost'), 'aria-pressed': String(!!S.ovMode), onclick: () => { S.ovMode = !S.ovMode; draw(); } }, S.ovMode ? '휴무 변경 모드 끄기' : '휴무 변경 모드');
       const noZone = [...S.mark.values()].filter((v) => !v).length;
       const doSave = (close) => async () => {
         if (close && !window.confirm(`체크하지 않은 ${k.rest}명이 결근으로 확정됩니다. 완료할까요?`)) return;
@@ -191,11 +291,14 @@
       body.replaceChildren(tabs, top,
         el('div', { class: 'ck-tiles' }, tile('정원', k.total), tile('근태', k.leave), tile('출근 체크', k.present, 'ok'), tile('남은 인원', k.rest, k.rest ? 'mid' : 'ok')),
         el('p', { class: 'ck-gline' }, `출근 체크  ${gline(k)}`),
+        leads.length ? el('p', { class: 'ck-gline' }, `팀 현장관리 ${lineOf(leads)}명 · 팀원 ${lineOf(mems)}명 (출근 / 근무 예정)`) : null,
         teamRows.some((r) => !r.gender) ? el('div', { class: 'err' }, `성별이 지정되지 않은 직원 ${teamRows.filter((r) => !r.gender).length}명 — 남·여 인원이 정확하지 않습니다. 위의 "성별 설정" 탭에서 지정하세요.`) : null,
         k.closed ? el('div', { class: 'info' }, el('b', {}, '완료된 팀입니다'), '고친 뒤 "다시 완료"를 누르면 결근이 다시 계산됩니다.') : null,
         el('div', { class: 'card' }, el('h2', {}, `${S.team} 출근 체크`),
           el('label', { class: 'f' }, el('span', {}, '① 배치할 구역'), zSel),
-          el('div', { class: 'f' }, el('span', { class: 'hint' }, '② 출근한 사람 이름을 누르세요 (다시 누르면 취소)'), el('div', { class: 'ppgrid' }, people)),
+          el('div', { class: 'btnrow' }, ovBtn),
+          S.ovMode ? el('div', { class: 'info' }, el('b', {}, '휴무 변경 모드'), '휴무인 사람을 누르면 오늘 출근으로, 근무인 사람을 누르면 오늘 휴무로 바뀝니다. "변경" 표시가 있는 사람을 누르면 취소됩니다. 오늘 하루만 적용됩니다.') : null,
+          el('div', { class: 'f' }, el('span', { class: 'hint' }, S.ovMode ? '② 변경할 사람 이름을 누르세요' : '② 출근한 사람 이름을 누르세요 (다시 누르면 취소)'), people),
           noZone ? el('p', { class: 'hint' }, `구역을 지정하지 않은 사람 ${noZone}명`) : null,
           el('p', { class: 'hint' }, '"출근 체크 완료"를 누르면 체크하지 않은 사람이 결근으로 확정됩니다.')),
         el('div', { class: 'actions' }, save, done));

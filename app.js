@@ -408,17 +408,18 @@
 
   async function setupView(body) {
     body.replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
-    const [sh, qu, zo, tk] = await Promise.all([
+    const [sh, qu, zo, tk, tsr] = await Promise.all([
       sb.from('shift_defs').select('code,sort').order('sort'),
       sb.from('staffing_quota').select('division_id,shift,daily_quota,full_quota'),
-      sb.from('zones').select('id,division_id,side,floor,area,label,task,required,sort,active').order('sort'),
-      sb.from('task_types').select('name,sort,active').order('sort')
+      sb.from('zones').select('id,division_id,side,floor,area,team,label,task,required,sort,active').order('sort'),
+      sb.from('task_types').select('name,sort,active').order('sort'),
+      sb.from('team_shift').select('division_id,team').then((r) => (r.error ? { data: [] } : r), () => ({ data: [] }))
     ]);
     if (sh.error || qu.error || zo.error || tk.error) {
       body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요'));
       return;
     }
-    Object.assign(state.setup, { shifts: sh.data || [], quota: qu.data || [], zones: zo.data || [], tasks: tk.data || [] });
+    Object.assign(state.setup, { shifts: sh.data || [], quota: qu.data || [], zones: zo.data || [], tasks: tk.data || [], teams: tsr.data || [] });
     if (!state.setup.div) state.setup.div = (bizDivs()[0] || {}).id || null;
     drawSetup(body);
   }
@@ -479,19 +480,23 @@
     divSel.value = String(S.div);
     divSel.addEventListener('change', () => { S.div = Number(divSel.value); drawSetup(body); });
 
-    const f = { side: 'L/S', area: '전체' };
+    const f = S.zf || (S.zf = { side: 'L/S', area: '전체', kind: 'floor' });
+    const divTeams = [...new Set(S.teams.filter((x) => x.division_id === S.div && /^\d{1,2}팀$/.test(x.team)).map((x) => x.team))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+    const teamSel = el('select', { 'aria-label': '담당 팀' }, el('option', { value: '' }, '공통 (모든 팀에 보임)'), ...divTeams.map((t) => el('option', { value: t }, t)));
+    teamSel.value = S.zteamNew || '';
+    teamSel.addEventListener('change', () => { S.zteamNew = teamSel.value; });
     const taskSel = el('select', { 'aria-label': '업무' }, ...S.tasks.filter((t) => t.active).map((t) => el('option', { value: t.name }, t.name)));
-    const floorIn = el('input', { type: 'text', maxlength: '10', autocomplete: 'off', placeholder: '예: 3F, B1, 1~2F', 'aria-label': '층' });
+    const floorIn = el('input', { type: 'text', maxlength: '10', autocomplete: 'off', placeholder: f.kind === 'work' ? '예: 카페트, 석재, 집하장, 고소유리세척' : '예: 3층, B1', 'aria-label': f.kind === 'work' ? '업무 이름' : '층' });
     const labelIn = el('input', { type: 'text', maxlength: '30', autocomplete: 'off', placeholder: '예: 탑승동 (없으면 비움)', 'aria-label': '구역 이름' });
     const reqIn = numIn('', '필요 인원');
     const add = el('button', { class: 'btn', type: 'button' }, '구역 추가');
     add.addEventListener('click', busy(add, async () => {
       const floor = floorIn.value.trim(), req = toInt(reqIn.value);
-      if (!floor) return toast('층을 입력하세요', 'err');
+      if (!floor) return toast(f.kind === 'work' ? '업무 이름을 입력하세요' : '층을 입력하세요', 'err');
       if (!taskSel.value) return toast('업무 종류를 먼저 등록하세요', 'err');
       if (Number.isNaN(req)) return toast('필요 인원은 숫자만 입력하세요', 'err');
       const { error } = await sb.from('zones').insert({
-        division_id: S.div, side: f.side, floor, area: f.area, task: taskSel.value,
+        division_id: S.div, side: f.side, floor, area: f.kind === 'work' ? '전체' : f.area, task: taskSel.value, team: teamSel.value || null,
         label: labelIn.value.trim() || null, required: req || 0, sort: 0
       });
       if (error) return toast(error.code === '23505' ? '같은 구역이 이미 있습니다' : '추가하지 못했습니다. 권한을 확인하세요', 'err');
@@ -500,26 +505,31 @@
     }));
     const form = el('div', { class: 'card' },
       el('h2', {}, '구역 추가'),
+      el('div', { class: 'f' }, el('span', { class: 'hint' }, '구역 종류'), seg([['floor', '층별'], ['work', '업무별 (화장실·수거·기타 등)']], f.kind, (v) => { f.kind = v; drawSetup(body); })),
+      el('label', { class: 'f' }, el('span', {}, '담당 팀'), teamSel),
       el('div', { class: 'f' }, el('span', { class: 'hint' }, '구분'), seg(SIDES, f.side, (v) => { f.side = v; })),
-      el('label', { class: 'f' }, el('span', {}, '층'), floorIn),
-      el('div', { class: 'f' }, el('span', { class: 'hint' }, '동편 / 서편'), seg(AREAS, f.area, (v) => { f.area = v; })),
+      el('label', { class: 'f' }, el('span', {}, f.kind === 'work' ? '업무 이름 (기타는 직접 작성)' : '층'), floorIn),
+      f.kind === 'work' ? null : el('div', { class: 'f' }, el('span', { class: 'hint' }, '동편 / 서편'), seg(AREAS, f.area, (v) => { f.area = v; })),
       el('label', { class: 'f' }, el('span', {}, '업무'), taskSel),
       el('label', { class: 'f' }, el('span', {}, '구역 이름 (선택)'), labelIn),
       el('label', { class: 'f' }, el('span', {}, '필요 인원'), reqIn),
       add);
 
-    const zs = S.zones.filter((z) => z.division_id === S.div)
-      .sort((a, b) => SIDES.findIndex(([k]) => k === a.side) - SIDES.findIndex(([k]) => k === b.side)
+    const tf = S.zteam || '';
+    const teamBar = el('div', { class: 'f' }, el('span', { class: 'hint' }, '팀별 보기'), seg([['', '전체'], ...divTeams.map((t) => [t, t])], tf, (v) => { S.zteam = v; drawSetup(body); }));
+    const zs = S.zones.filter((z) => z.division_id === S.div && (!tf || z.team === tf))
+      .sort((a, b) => String(a.team || '').localeCompare(String(b.team || ''), 'ko', { numeric: true }) || SIDES.findIndex(([k]) => k === a.side) - SIDES.findIndex(([k]) => k === b.side)
         || a.floor.localeCompare(b.floor, 'ko', { numeric: true }) || a.area.localeCompare(b.area, 'ko') || a.task.localeCompare(b.task, 'ko'));
     const total = zs.filter((z) => z.active).reduce((t, z) => t + z.required, 0);
     const rows = zs.map((z) => {
       const rq = numIn(z.required, '필요 인원');
+      const zt = el('select', { 'aria-label': '담당 팀' }, el('option', { value: '' }, '공통'), ...divTeams.map((t) => el('option', { value: t }, t))); zt.value = z.team || '';
       const save = el('button', { class: 'btn ghost sm', type: 'button' }, '저장');
       const tog = el('button', { class: 'btn ghost sm', type: 'button' }, z.active ? '사용 중지' : '다시 사용');
       save.addEventListener('click', busy(save, async () => {
         const v = toInt(rq.value);
         if (v == null || Number.isNaN(v)) return toast('필요 인원은 숫자만 입력하세요', 'err');
-        const { error } = await sb.from('zones').update({ required: v }).eq('id', z.id);
+        const { error } = await sb.from('zones').update({ required: v, team: zt.value || null }).eq('id', z.id);
         if (error) return toast('저장하지 못했습니다', 'err');
         toast('저장했습니다'); await setupView(body);
       }));
@@ -529,13 +539,13 @@
         await setupView(body);
       }));
       return el('div', { class: 'zrow' + (z.active ? '' : ' off') },
-        el('div', {}, el('b', {}, `${z.side} · ${z.floor} · ${z.area} · ${z.task}`), z.label ? el('small', {}, z.label) : null, z.active ? null : el('small', {}, '사용 중지됨')),
-        el('div', { class: 'zact' }, rq, el('span', {}, '명'), save, tog));
+        el('div', {}, el('b', {}, `${z.team ? z.team + ' · ' : ''}${z.side} · ${z.floor} · ${z.area} · ${z.task}`), z.label ? el('small', {}, z.label) : null, z.active ? null : el('small', {}, '사용 중지됨')),
+        el('div', { class: 'zact' }, zt, rq, el('span', {}, '명'), save, tog));
     });
     const list = el('div', { class: 'card' },
       el('h2', {}, `등록된 구역 ${zs.length}개`, el('small', { class: 'sumtxt' }, `필요 인원 합계 ${total}명`)),
       rows.length ? rows : el('p', { class: 'empty' }, '아직 등록된 구역이 없습니다. 위에서 추가하세요'));
-    return el('div', {}, el('div', { class: 'f top0' }, el('span', { class: 'hint' }, '사업부'), divSel), form, list);
+    return el('div', {}, el('div', { class: 'f top0' }, el('span', { class: 'hint' }, '사업부'), divSel), form, el('div', { class: 'card' }, teamBar), list);
   }
 
   function tasksPane(body) {
