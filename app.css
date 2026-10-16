@@ -797,3 +797,42 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .rm{overflow:hidden}
 .rm .rt b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rm .lb{font-size:10.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+
+/* 사업부별·층별 표 + 팀별 접이식: 폰 폭에 맞춤 */
+.fltbl,.teamcard .tbl{table-layout:fixed;width:100%;min-width:0}
+.fltbl th,.fltbl td,.teamcard .tbl th,.teamcard .tbl td{padding:5px 2px;font-size:11.5px;text-align:center;white-space:normal;word-break:keep-all}
+.fltbl th:first-child{width:23%;text-align:left;padding-left:4px;font-size:11.5px}
+.fltbl thead th{line-height:1.15}
+.fltbl td.dim{color:#B5BDC8}
+.fltbl tr.sum th,.fltbl tr.sum td{background:var(--slate);font-weight:700}
+.flcard .tblwrap,.teamcard .tblwrap{overflow-x:visible}
+.teamcard .basisbtn{width:100%}
+
+.fltbl th:first-child{white-space:normal}
+.flall{margin-bottom:6px}
+
+/* 근무 현황 표 통합: 구분 칸 좁게, 머리글 한 줄 */
+.fltbl th{white-space:nowrap;font-size:11px}
+.fltbl.flsum th:first-child{width:15%;padding-left:4px}
+.fltbl.flsum td,.fltbl.flsum th{font-size:12px}
+.gcard .gsup{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.gcard .gsup>div{min-width:0}.gcard .gsup b{font-size:16px}
+
+/* 사업부 네임택: 튀지 않는 3가지 차분한 톤 (T1 청색 / T2 청록 / 부대 샌드) */
+:root{--n1:#DCE6F2;--n1i:#1F3A5F;--n1l:#7C9AC2;--n2:#D7EBE7;--n2i:#1E5A55;--n2l:#6FAFA6;--n3:#EFE6D4;--n3i:#6B5429;--n3l:#C4A56A}
+.tbl tbody th.dv-t1,.divh2.dv-t1,.lk-dv.dv-t1,.stile.dv-t1,.seg button.dv-t1:not(.on){background:var(--n1);color:var(--n1i)}
+.tbl tbody th.dv-t2,.divh2.dv-t2,.lk-dv.dv-t2,.stile.dv-t2,.seg button.dv-t2:not(.on){background:var(--n2);color:var(--n2i)}
+.tbl tbody th.dv-bd,.divh2.dv-bd,.lk-dv.dv-bd,.stile.dv-bd,.seg button.dv-bd:not(.on){background:var(--n3);color:var(--n3i)}
+.divh2.dv-t1{border-left:5px solid var(--n1l)}.divh2.dv-t2{border-left:5px solid var(--n2l)}.divh2.dv-bd{border-left:5px solid var(--n3l)}
+.stile.dv-t1{border-color:var(--n1l)}.stile.dv-t2{border-color:var(--n2l)}.stile.dv-bd{border-color:var(--n3l)}
+
+/* 비율 기준 선택 */
+.ratiobar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 6px;font-size:12px}
+.ratiobar .rl{font-weight:700;color:var(--navy)}
+.rseg{display:flex;gap:4px;flex:1;min-width:0}
+.rseg .rb{flex:1 1 0;min-width:0;border:0;border-radius:8px;background:var(--slate);color:var(--sub);font-weight:700;font-size:11.5px;padding:7px 2px;cursor:pointer;white-space:nowrap}
+.rseg .rb.on{background:var(--navy);color:#fff}
+.rcustom{display:flex;gap:6px;align-items:flex-end;margin:4px 0 8px;flex-wrap:wrap}
+.rcustom .rc{display:flex;flex-direction:column;gap:2px;flex:1 1 60px;min-width:0;font-size:11.5px;font-weight:700;color:var(--sub)}
+.rcustom .rc input{width:100%;height:34px;font-size:14px;text-align:center}
+.rcustom .btn.sm{min-height:34px;padding:0 14px;font-size:13px}
+@media (min-width:761px){.gcard>.sumwrap{grid-column:2;grid-row:2}}
