@@ -408,18 +408,24 @@
 
   async function setupView(body) {
     body.replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
-    const [sh, qu, zo, tk, tsr] = await Promise.all([
+    const todayKst = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+    const [sh, qu, zo, tk, tsr, lt, rt] = await Promise.all([
       sb.from('shift_defs').select('code,sort').order('sort'),
       sb.from('staffing_quota').select('division_id,shift,daily_quota,full_quota'),
       sb.from('zones').select('id,division_id,side,floor,area,team,label,task,required,sort,active').order('sort'),
       sb.from('task_types').select('name,sort,active').order('sort'),
-      sb.from('team_shift').select('division_id,team').then((r) => (r.error ? { data: [] } : r), () => ({ data: [] }))
+      sb.from('team_shift').select('division_id,team').then((r) => (r.error ? { data: [] } : r), () => ({ data: [] })),
+      sb.rpc('leave_team', { p_date: todayKst }).then((r) => (r.error ? { data: [] } : r), () => ({ data: [] })),
+      sb.from('settings').select('key,value').eq('key', 'daily_ratio').then((r) => (r.error ? { data: [] } : r), () => ({ data: [] }))
     ]);
     if (sh.error || qu.error || zo.error || tk.error) {
       body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요'));
       return;
     }
-    Object.assign(state.setup, { shifts: sh.data || [], quota: qu.data || [], zones: zo.data || [], tasks: tk.data || [], teams: tsr.data || [] });
+    const rosterBy = {};
+    for (const r of (lt.data || [])) { if (/^행정/.test(String(r.team || '').trim())) continue; const k = `${r.division_id}|${r.shift}`; rosterBy[k] = (rosterBy[k] || 0) + (r.roster || 0); }
+    const pctV = rt.data && rt.data[0] && rt.data[0].value && Number(rt.data[0].value.pct) > 0 ? Number(rt.data[0].value.pct) : 65;
+    Object.assign(state.setup, { shifts: sh.data || [], quota: qu.data || [], zones: zo.data || [], tasks: tk.data || [], teams: tsr.data || [], rosterBy, pct: pctV });
     if (!state.setup.div) state.setup.div = (bizDivs()[0] || {}).id || null;
     drawSetup(body);
   }
@@ -431,15 +437,21 @@
   }
 
   function quotaPane(body) {
-    const S = state.setup, inputs = {};
+    const S = state.setup, inputs = {}, rosterBy = S.rosterBy || {};
+    const pctIn = numIn(S.pct || 65, '일일근무 정원 비율(%)');
+    const pctOf = () => { const p = toInt(pctIn.value); return p && p >= 1 && p <= 100 ? p : 65; };
+    const autoDaily = (full) => Math.round((full * pctOf()) / 100);
     const cards = bizDivs().map((d) => {
       const sumA = el('b', {}), sumB = el('b', {});
       const rows = S.shifts.map((s) => {
         const q = S.quota.find((x) => x.division_id === d.id && x.shift === s.code);
-        const a = numIn(q ? q.daily_quota : '', `${d.name} ${s.code} 일일근무정원`);
-        const b = numIn(q ? q.full_quota : '', `${d.name} ${s.code} 상근 정원`);
+        const ros = rosterBy[`${d.id}|${s.code}`] || 0;
+        const fullV = q ? q.full_quota : (ros || '');
+        const dailyV = q ? q.daily_quota : (ros ? autoDaily(ros) : '');
+        const a = numIn(dailyV, `${d.name} ${s.code} 일일근무정원`);
+        const b = numIn(fullV, `${d.name} ${s.code} 상근 정원`);
         inputs[`${d.id}|${s.code}`] = [a, b, !!q];
-        return { s, a, b };
+        return { s, a, b, ros };
       });
       const calc = () => {
         sumA.textContent = String(rows.reduce((t, r) => t + (toInt(r.a.value) || 0), 0));
@@ -447,11 +459,17 @@
       };
       rows.forEach((r) => { r.a.addEventListener('input', calc); r.b.addEventListener('input', calc); });
       calc();
+      d._rows = rows; d._calc = calc;
       return el('div', { class: 'card qcard' },
         el('h2', {}, d.name),
         el('div', { class: 'qrow hd' }, el('span', {}, '근무조'), el('span', {}, '일일근무정원'), el('span', {}, '상근 정원')),
-        rows.map((r) => el('div', { class: 'qrow' }, el('b', {}, r.s.code), r.a, r.b)),
+        rows.map((r) => el('div', { class: 'qrow' }, el('b', {}, r.s.code, r.ros ? el('small', { class: 'qros' }, ` 휴무계획 ${r.ros}명`) : null), r.a, r.b)),
         el('div', { class: 'qrow sum' }, el('b', {}, '합계'), sumA, sumB));
+    });
+    const fill = el('button', { class: 'btn ghost sm', type: 'button' }, '휴무계획 인원으로 자동 채우기');
+    fill.addEventListener('click', () => {
+      for (const d of bizDivs()) { for (const r of d._rows || []) { if (r.ros) { r.b.value = String(r.ros); r.a.value = String(autoDaily(r.ros)); } } d._calc && d._calc(); }
+      toast('휴무계획 인원으로 채웠습니다. 저장해야 반영됩니다');
     });
     const go = el('button', { class: 'btn', type: 'button' }, '정원 저장');
     go.addEventListener('click', busy(go, async () => {
@@ -466,12 +484,20 @@
       if (!rows.length) return toast('입력된 정원이 없습니다', 'err');
       const { error } = await sb.from('staffing_quota').upsert(rows, { onConflict: 'division_id,shift' });
       if (error) return toast('저장하지 못했습니다. 권한을 확인하세요', 'err');
-      toast('정원을 저장했습니다');
+      await sb.from('settings').upsert({ key: 'daily_ratio', value: { pct: pctOf() }, note: '일일근무 정원 비율(%)' }, { onConflict: 'key' });
+      toast('정원을 저장했습니다. 현황 "집계 기준 변경"에서 정원 기준을 고르면 반영됩니다');
       await setupView(body);
     }));
     return el('div', {},
-      el('p', { class: 'hint pad' }, '해당 없는 근무조는 비워 두세요. 일일근무정원 = 매일 근무해야 하는 인원, 상근 정원 = 전체 정원입니다.'),
-      cards, go);
+      el('p', { class: 'hint pad' }, '상근 정원 = 휴무계획 인원(행정 제외), 일일근무 정원 = 상근 정원 × 아래 비율로 자동 채웁니다. 숫자를 직접 고치면 그 값이 저장됩니다. 해당 없는 근무조는 비워 두세요.'),
+      el('div', { class: 'card qratio' }, el('label', { class: 'f' }, el('span', {}, '일일근무 정원 비율 (%)'), pctIn), fill),
+      cards, go,
+      el('div', { class: 'card qwhere' }, el('h2', {}, '저장하면 바뀌는 곳'),
+        el('ul', { class: 'qlist' },
+          el('li', {}, '현황 화면 "집계 기준 변경"에서 "일일근무정원" 또는 "상근정원"을 고르면, 정원·투입 비율·결근·"일일정원 / 상근 대비"가 여기서 저장한 정원으로 계산됩니다'),
+          el('li', {}, '지금 기본값은 "사업부 전체 인원"(휴무계획 명단)이라, 기준을 바꾸기 전에는 저장해도 현황 숫자가 그대로입니다'),
+          el('li', {}, '시각별 저장·보고서: 저장 이후에 만든 보고서부터 반영됩니다 (이전 보고서는 그대로)'),
+          el('li', {}, '구역별 부족·충족(필요 인원)과 노조현황은 바뀌지 않습니다'))));
   }
 
   function zonesPane(body) {

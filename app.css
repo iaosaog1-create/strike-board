@@ -1056,3 +1056,7 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .pp.ukb-m{border-right:5px solid #D9372B}.pp.ukb-h{border-right:5px solid #2F6FDE}.pp.ukb-n{border-right:5px solid #2FA67C}
 .pp.ukb-m.on{border-right:5px solid #D9372B}.pp.ukb-h.on{border-right:5px solid #2F6FDE}.pp.ukb-n.on{border-right:5px solid #2FA67C}
 .uklg .ukd{width:5px;height:14px;border-radius:2px}
+
+.qros{font-weight:600;color:var(--sub);font-size:11px}
+.qratio{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.qratio .f{margin:0;min-width:160px}
+.qlist{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7;color:var(--ink)}
