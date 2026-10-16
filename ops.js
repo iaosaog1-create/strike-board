@@ -124,16 +124,20 @@
     const o = ctx();
     const redraw = () => inputView(body);
     body.replaceChildren(pickers(o, redraw), loading());
-    let zones, latest, quota;
-    try { let tsm; [zones, latest, quota, tsm] = await Promise.all([loadZones(o.division), loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).eq('source', '사업부')), loadQuota(), loadTeamShift(o.division)]); zones = teamFilter(zones, tsm, o.shift); }
+    let zones, latest, quota; let rosterAll = [];
+    try { let tsm; [zones, latest, quota, tsm, rosterAll] = await Promise.all([loadZones(o.division), loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).eq('source', '사업부')), loadQuota(), loadTeamShift(o.division), sb.rpc('team_roster', { p_date: o.date, p_team: null }).then((r) => (r.error ? [] : r.data || []), () => [])]); zones = teamFilter(zones, tsm, o.shift); }
     catch (e) { body.replaceChildren(pickers(o, redraw), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); return; }
     const last = new Map(latest.map((r) => [r.zone_id, r]));
     const lastAt = latest.reduce((m, r) => (r.entered_at > m ? r.entered_at : m), '');
     const need = quota.filter((x) => x.division_id === o.division && x.shift === o.shift).reduce((t, x) => t + x.daily_quota, 0);
 
+    // 근무 가능 인원 = 이 사업부·근무조 휴무계획 명단에서 근태(휴무·연차 등)와 행정 팀을 뺀 인원. 명단이 없으면 제한하지 않음
+    const OFFK0 = ['off', 'hold', 'annual', 'health', 'sick', 'other'];
+    const rs0 = (rosterAll || []).filter((r) => r.division_id === o.division && r.shift === o.shift && String(r.team || '').trim() !== '행정');
+    const avail = rs0.length ? rs0.filter((r) => !OFFK0.includes(r.leave_kind)).length : null;
     const inputs = new Map();
     const totalEl = el('b', {});
-    const calc = () => { totalEl.textContent = String([...inputs.values()].reduce((t, i) => t + (toInt(i.value) || 0), 0)); };
+    const calc = () => { const t = [...inputs.values()].reduce((s, i) => s + (toInt(i.value) || 0), 0); totalEl.textContent = String(t); totalEl.className = avail != null && t > avail ? 'neg' : ''; };
     const sections = groupZones(zones).map((s) => s.floors.map((f) => el('div', { class: 'card' },
       floorHead(s.side, f.floor),
       el('div', { class: 'zgrid' }, f.zones.map((z) => {
@@ -154,6 +158,11 @@
       for (const z of zones) {
         const v = toInt(inputs.get(z.id).value);
         if (Number.isNaN(v)) return toast('인원은 숫자만 입력하세요', 'err');
+      }
+      const sumIn = [...inputs.values()].reduce((s, i) => s + (toInt(i.value) || 0), 0);
+      if (avail != null && sumIn > avail) return toast(`입력 ${sumIn}명 > ${o.shift} 근무 가능 ${avail}명 — ${sumIn - avail}명 초과라 저장되지 않았습니다`, 'err');
+      for (const z of zones) {
+        const v = toInt(inputs.get(z.id).value);
         if (v == null) continue;
         if (last.has(z.id) && last.get(z.id).headcount === v) continue;
         rows.push({ work_date: o.date, shift: o.shift, zone_id: z.id, division_id: o.division, headcount: v, entered_by: state.me.id, source: '사업부' });
@@ -167,7 +176,7 @@
     body.replaceChildren(pickers(o, redraw),
       el('div', { class: 'card sumbar' },
         el('div', {}, el('span', {}, '입력 합계'), totalEl, el('small', {}, '명')),
-        el('div', {}, el('span', {}, '일일근무정원'), el('b', {}, need ? String(need) : '-'), el('small', {}, need ? '명' : '')),
+        el('div', {}, el('span', {}, `${o.shift} 근무 가능`), el('b', {}, avail != null ? String(avail) : '-'), el('small', {}, avail != null ? '명' : '')),
         el('div', {}, el('span', {}, '마지막 저장'), el('b', {}, lastAt ? hhmm(lastAt) : '-'))),
       zones.length ? [sections, save] : noZones());
   }
@@ -706,14 +715,15 @@
     const o = ctx();
     const redraw = () => placeView(body);
     body.replaceChildren(pickers(o, redraw), loading());
-    let zones, latest, counts, depts;
+    let zones, latest, counts, depts; let availList = null;
     try {
       let tsm;
-      [zones, latest, counts, tsm] = await Promise.all([
+      [zones, latest, counts, tsm, availList] = await Promise.all([
         loadZones(o.division),
         loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).in('source', ['지원', '협정'])),
         sb.rpc('coop_counts', { p_date: o.date }).then((r) => (r.error ? [] : r.data || [])),
-        loadTeamShift(o.division)]);
+        loadTeamShift(o.division),
+        sb.rpc('list_support_avail', { p_date: o.date, p_division: o.division, p_shift: o.shift }).then((r) => (r.error ? null : r.data || []), () => null)]);
       zones = teamFilter(zones, tsm, o.shift);
       depts = (state.divisions || []).filter((d) => d.kind === '지원부서');
     } catch (e) { body.replaceChildren(pickers(o, redraw), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); return; }
@@ -730,6 +740,11 @@
       const rem = cnt.present - c;
       sums.rem.textContent = String(rem); sums.rem.className = rem < 0 ? 'neg' : '';
     };
+    // 지원부서별 '오늘 지원 가능 인원' (입력하면 배치 합계가 이 인원을 넘을 때 저장 차단, 비우면 제한 없음)
+    const availIn = new Map(depts.map((d) => { const a = (availList || []).find((x) => x.dept_id === d.id); return [d.id, numIn(a ? a.available : '', `${d.name} 지원 가능 인원`)]; }));
+    const availCard = availList === null ? null : el('div', { class: 'card' }, el('h2', {}, `${o.shift} 지원 가능 인원`),
+      el('p', { class: 'hint' }, '부서별로 이 근무조에 지원 나올 수 있는 인원을 입력하면, 아래 배치 합계가 그 인원을 넘을 때 저장되지 않습니다. 비워 두면 제한하지 않습니다.'),
+      el('div', { class: 'zgrid' }, depts.map((d) => el('div', { class: 'zc' }, el('div', { class: 'zch' }, el('b', {}, d.name)), stepper(availIn.get(d.id))))));
     const cols = depts.map((d) => [d.name, '지원', d.id]);   // 협정은 '협정 출퇴근' 화면에서 이름으로 배치
     const secs = groupZones(zones).map((s) => s.floors.map((f) => el('div', { class: 'card' }, floorHead(s.side, f.floor),
       el('div', { class: 'zgrid' }, f.zones.map((z) => el('div', { class: 'zc' },
@@ -744,6 +759,18 @@
     const save = el('button', { class: 'btn', type: 'button' }, '저장');
     save.addEventListener('click', busy(save, async () => {
       const rows = [];
+      const lim = new Map();
+      for (const d of depts) { const v = toInt(availIn.get(d.id).value); if (Number.isNaN(v)) return toast('지원 가능 인원은 숫자만 입력하세요', 'err'); lim.set(d.id, v); }
+      for (const d of depts) {
+        const lv = lim.get(d.id); if (lv == null) continue;
+        const sm = [...inputs].filter(([k]) => k.endsWith(`|지원|${d.id}`)).reduce((t, [, i]) => t + (toInt(i.value) || 0), 0);
+        if (sm > lv) return toast(`${d.name} 배치 ${sm}명 > 지원 가능 ${lv}명 — ${sm - lv}명 초과라 저장되지 않았습니다`, 'err');
+      }
+      if (availList !== null) {
+        const ar = depts.filter((d) => lim.get(d.id) != null).map((d) => ({ dept_id: d.id, available: lim.get(d.id) }));
+        const rr = await sb.rpc('set_support_avail', { p_date: o.date, p_division: o.division, p_shift: o.shift, p_rows: ar });
+        if (rr.error) return toast('지원 가능 인원을 저장하지 못했습니다', 'err');
+      }
       for (const z of zones) for (const [, source, dept] of cols) {
         const k = key(z.id, source, dept); const v = toInt(inputs.get(k).value);
         if (Number.isNaN(v)) return toast('인원은 숫자만 입력하세요', 'err');
@@ -762,7 +789,8 @@
         el('div', {}, el('span', {}, '협정 출근'), el('b', {}, String(cnt.present)), el('small', {}, '명')),
         el('div', {}, el('span', {}, '구역 배치'), el('b', {}, String(cnt.assigned)), el('small', {}, '명')),
         el('div', {}, el('span', {}, '남은 인원'), el('b', { class: cnt.remaining < 0 ? 'neg' : '' }, String(cnt.remaining)), el('small', {}, '명'))),
-      el('p', { class: 'hint pad' }, '협정인력은 "협정 출퇴근" 화면에서 이름으로 구역에 배치합니다. 여기에서는 지원부서 인원만 입력합니다.'),
+      el('p', { class: 'hint pad' }, '협정인력은 "협정 출퇴근" 화면에서 이름으로 구역에 배치합니다(출근한 협정 인원보다 많이 배치할 수 없음). 여기에서는 지원부서 인원만 입력합니다.'),
+      availCard,
       zones.length ? [secs, save] : noZones());
   }
 
