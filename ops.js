@@ -455,7 +455,7 @@
         const saveRatio = async (cfg) => {
           const { error } = await sb.from('settings').upsert({ key: 'ratio_base', value: cfg, note: '현황 비율 기준' }, { onConflict: 'key' });
           if (error) return toast('저장하지 못했습니다. 다시 시도해 주세요');
-          ratioCfg = cfg; toast('비율 기준을 저장했습니다'); draw(zones, rows, quota);
+          ratioCfg = cfg; o.ratioOpen = false; toast('비율 기준을 저장했습니다'); draw(zones, rows, quota);
         };
         const ratioBar = el('div', { class: 'ratiobar' }, el('span', { class: 'rl' }, '비율 기준'),
           canEdit ? el('div', { class: 'rseg' }, MODES.map(([k, l]) => el('button', {
@@ -468,7 +468,9 @@
             el('button', { type: 'button', class: 'btn sm', onclick: () => { const c = {}; ins.forEach((i, id) => { const n = toInt(i.value); if (n > 0) c[id] = n; }); saveRatio({ mode: 'custom', custom: c }); } }, '저장'));
           return box;
         })() : null;
-        const sumWrap = el('div', { class: 'sumwrap' }, ratioBar, customBox, sumTbl);
+        const panelOn = canEdit && !!o.ratioOpen;
+        if (canEdit) { const h = tilesRow.querySelector('h2'); if (h) { h.classList.add('gh'); h.append(el('button', { type: 'button', class: 'gset' + (panelOn ? ' on' : ''), 'aria-expanded': String(panelOn), onclick: () => { o.ratioOpen = !o.ratioOpen; draw(zones, rows, quota); } }, panelOn ? '닫기' : '비율 기준 변경')); } }
+        const sumWrap = el('div', { class: 'sumwrap' }, panelOn ? ratioBar : null, panelOn ? customBox : null, sumTbl);
         const oldTbl = tilesRow.querySelector('.tblwrap'); if (oldTbl) oldTbl.replaceWith(sumWrap);
         const oldSup = tilesRow.querySelector('.gsup');
         if (oldSup) oldSup.replaceChildren(...[['근무', T.biz], ['지원', T.sup], ['협정', T.coop], ['총계', T.total]].map(([n, v]) => el('div', {}, el('b', {}, `${v || 0}명`), el('small', {}, n))));

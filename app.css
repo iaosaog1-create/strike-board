@@ -836,3 +836,8 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .rcustom .rc input{width:100%;height:34px;font-size:14px;text-align:center}
 .rcustom .btn.sm{min-height:34px;padding:0 14px;font-size:13px}
 @media (min-width:761px){.gcard>.sumwrap{grid-column:2;grid-row:2}}
+
+/* 비율 기준: 평소에는 숨기고 버튼을 눌렀을 때만 펼침 */
+.gcard h2.gh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.gset{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:999px;font-size:11.5px;font-weight:700;padding:5px 11px;cursor:pointer}
+.gset.on{background:var(--navy);color:#fff;border-color:var(--navy)}
