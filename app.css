@@ -951,3 +951,8 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .bnote{margin:8px 0 0;font-size:16px;color:var(--sub)}
 @media (max-width:700px){.bhero{grid-template-columns:1fr;gap:6px;padding:12px;border-radius:16px}.bhero .bname{font-size:15px}.bhero .bbig{font-size:48px}.bhero .bbig small{font-size:14px}.bhero .bpct{font-size:30px}.hbar{height:14px}.hsub{font-size:12px;gap:12px}.hsub b{font-size:18px}.bsec h2{font-size:15px}.btbl{font-size:12px}.btbl thead th{font-size:11px}.btbl th,.btbl td{padding:6px 3px}.btbl .n{margin:0 3px;font-size:11px;display:inline-block}.btbl .n b{font-size:14px}.btbl td small{font-size:10px}.bnote{font-size:11px}}
 @media (max-width:520px){.untbl{font-size:12px}.untbl td b{font-size:13px}.untbl td small{font-size:10px}.untbl th,.untbl td{padding:6px 2px}.untbl thead th{font-size:11px}.unc .evh small{display:none}}
+.fltbl td.unk{color:#8A5A00;font-weight:700}
+.fltbl th.gl,.fltbl td.gl{border-left:2px solid var(--line)}
+.hsub .hgap{margin-left:20px;padding-left:20px;border-left:2px solid #CBD3DD}.hsub b.hab{color:#B3261E}
+@media (max-width:700px){.fltbl.flsum{font-size:11px}.fltbl.flsum th,.fltbl.flsum td{padding:6px 1px}.hsub .hgap{margin-left:6px;padding-left:10px}}
+@media (max-width:700px){.fltbl.flsum thead th{font-size:10px;letter-spacing:-.6px;white-space:nowrap}.fltbl.flsum td,.fltbl.flsum th{font-size:11px}}

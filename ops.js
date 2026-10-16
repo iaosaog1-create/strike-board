@@ -277,7 +277,7 @@
     if (!o.basis || !o.basisSet) { o.basis = [...shiftList()]; o.basisSet = true; }
     if (!isMaster(me) && o.division === 'all') o.division = me.division_id;
     const redraw = () => statusView(body);
-    let cache = null; let fdiv = null; let teamRows = null; let attRows = []; let rosterRows = []; let ratioCfg = { mode: 'daily', custom: {} }; let staffRows = []; let staffBucket = 'sup'; let incRows = []; let tsRows = []; let unionRows = null;
+    let cache = null; let fdiv = null; let teamRows = null; let attRows = []; let rosterRows = []; let ratioCfg = { mode: 'roster', custom: {} }; let staffRows = []; let staffBucket = 'sup'; let incRows = []; let tsRows = []; let unionRows = null;
     const refresh = async () => {
       let zones, rows, quota;
       try {
@@ -295,7 +295,7 @@
           sb.from('team_shift').select('division_id,team,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => []),
           sb.rpc('union_status', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null)]);
       staffBucket = staffV && staffV.bucket === 'biz' ? 'biz' : 'sup';
-      if (ratioV && typeof ratioV === 'object') ratioCfg = { mode: ['daily', 'full', 'custom'].includes(ratioV.mode) ? ratioV.mode : 'daily', custom: ratioV.custom || {} };
+      if (ratioV && typeof ratioV === 'object') ratioCfg = { mode: ['roster', 'daily', 'full', 'custom'].includes(ratioV.mode) ? ratioV.mode : 'roster', custom: ratioV.custom || {} };
       } catch (e) { return body.replaceChildren(pickers(o, redraw, { shiftPick: false, allDiv: true }), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); }
       draw(zones, rows, quota);
     };
@@ -349,11 +349,14 @@
       const staffOf = (d) => (staffRows || []).filter((x) => x.division_id === d && tIn(x.shift)).length;
       const stfB = (x) => (x.zone_id ? (SUPZ.has(x.zone_id) ? 'sup' : 'biz') : staffBucket);   // 구역 기준: 현장지원=지원, 그 외 구역=사업부 현장, 구역 없음=master 설정
       const sumD = (d, f) => { const r = sumBy(rows, f); const a = admOf(d); const ks = (staffRows || []).filter((x) => x.division_id === d && tIn(x.shift)); r.sup += a; r.total += a + ks.length; r.adm = a; r.stf = ks.length; for (const x of ks) { if (stfB(x) === 'biz') r.biz += 1; else r.sup += 1; } return r; };
-      const availOf = (d) => (teamRows || []).filter((t) => t.division_id === d && tIn(t.shift) && !isAdm(t.team)).reduce((n, t) => n + t.roster - t.absent, 0);
+      // 정원 대체값 = 휴무계획 전체 명단 (행정 제외). 휴무·연차는 빼지 않음 → 정원 = 출근 + 휴무외 + 결근 + 미확인
+      const availOf = (d) => (teamRows || []).filter((t) => t.division_id === d && tIn(t.shift) && !isAdm(t.team)).reduce((n, t) => n + t.roster, 0);
+      const OFFK = ['off', 'hold', 'annual', 'health', 'sick', 'other'];
       const quotaSum = (qu, d, b) => {
         if (ratioCfg.mode === 'custom' && Number(ratioCfg.custom[d]) > 0) return Number(ratioCfg.custom[d]);
         if (ratioCfg.mode === 'full') { const f = qu.filter((x) => x.division_id === d && b.includes(x.shift)).reduce((t, x) => t + (x.full_quota || 0), 0); if (f > 0) return f; }
-        const v = quotaSumRaw(qu, d, b); return v > 0 ? v : availOf(d);
+        if (ratioCfg.mode !== 'roster') { const v = quotaSumRaw(qu, d, b); if (v > 0) return v; }
+        const r0 = availOf(d); return r0 > 0 ? r0 : quotaSumRaw(qu, d, b);   // 기본: 사업부 전체 인원(휴무계획 명단)
       };
       // 사업부별 요약표
       let tot = { biz: 0, sup: 0, coop: 0, total: 0, q: 0 };
@@ -400,7 +403,7 @@
       const tilesRow = el('div', { class: 'card gcard' }, el('h2', {}, '근무 현황'),
         el('div', { class: 'gauge ' + gT0, style: `--a:${Math.min(100, gP0 || 0) * 1.8}deg` }, el('div', { class: 'arc' }), el('div', { class: 'gin' }),
           el('div', { class: 'gtx' }, el('b', {}, gP0 == null ? '-' : gP0 + '%'),
-            el('small', {}, `${gTot0} / ${gQ0 || '-'}명 · `, lack0 ? el('em', {}, `부족 ${lack0}명`) : el('span', { class: 'okt' }, gQ0 ? '충족' : '정원 미설정')))),
+            el('small', {}, `투입 ${gTot0} / 정원 ${gQ0 || '-'}명`))),
         el('div', { class: 'tblwrap' }, el('table', { class: 'tbl gtbl' },
           el('thead', {}, el('tr', {}, ...['구분', '현장', '지원', '협정', '근무', '정원', '비율'].map((h) => el('th', {}, h)))),
           el('tbody', {}, trs))),
@@ -411,7 +414,7 @@
       const digits = String(gTot).padStart(3, '0').split('');
       const shareBar = el('div', { class: 'share' }, divs.map((d) => { const n = sumBy(rows, (x) => x.division_id === d.id && inB(x)).total; return el('i', { class: divTone(d.id), style: `flex:${Math.max(n, 0.0001)}` }); }));
       const flip = el('div', { class: 'flipboard' },
-        el('div', { class: 'lb' }, el('span', {}, '현재 근무 인원 합계'), el('span', {}, gQ ? `정원 ${gQ}명 · 상근 대비 ${gP}%` : '정원 미설정')),
+        el('div', { class: 'lb' }, el('span', {}, '현재 투입 인원 합계 (근무+지원+협정)'), el('span', {}, gQ ? `정원 ${gQ}명 · 투입 비율 ${gP}%` : '정원 미설정')),
         el('div', { class: 'flap' }, digits.map((c) => el('div', { class: 'd' }, c)), el('span', { class: 'unit' }, '명')),
         shareBar,
         el('div', { class: 'shl' }, divs.map((d) => el('span', {}, `${shortDiv(d.name)} ${sumBy(rows, (x) => x.division_id === d.id && inB(x)).total}`))));
@@ -475,32 +478,35 @@
         const dsm = sumD(d.id, (x) => x.division_id === d.id && inB(x));
         const tt = (teamRows || []).filter((t) => t.division_id === d.id && tIn(t.shift) && !isAdm(t.team));
         const leaveN = tt.reduce((n, t) => n + t.absent, 0);
-        let ab = 0; let abAny = false;
-        for (const t of tt) { const rs = (rosterRows || []).filter((r) => r.division_id === d.id && tnum2(r.team) === tnum2(t.team)); if (rs.length && rs[0].closed) { abAny = true; ab += rs.filter((r) => !r.checked && !['off', 'hold', 'annual', 'health', 'sick', 'other'].includes(r.leave_kind)).length; } }
         const dq = quotaSum(quota, d.id, basis);
+        const W = dsm.biz; const L = tt.length ? leaveN : null;
+        const AB = dq > 0 ? Math.max(0, dq - W - (L || 0)) : null;          // 결근 = 정원 − 근무 − 휴무외 (파업 참여 + 출근 배치가 안 된 인원)
+        const GY = dq > 0 ? W + (L || 0) + AB : null;                          // 계 = 근무 + 휴무외 + 결근 (= 정원)
         const td = (v, cls) => el('td', cls ? { class: cls } : {}, v === null || v === undefined || v === 0 ? (v === 0 ? '0' : '-') : String(v));
-        dsum.push({ d, dq, biz: dsm.biz, sup: dsm.sup, coop: dsm.coop, leave: tt.length ? leaveN : null, ab: abAny ? ab : null, total: dsm.total });
-        const rowsEl = frs.map((f) => el('tr', {}, el('th', {}, f.name), td(f.req || null), td(f.biz), td(f.sup), td(f.coop), el('td', { class: 'dim' }, '-'), el('td', { class: 'dim' }, '-'), td(f.total, 'b')));
+        const dm = () => el('td', { class: 'dim' }, '-');
+        dsum.push({ d, dq, biz: W, leave: L, ab: AB, gye: GY, sup: dsm.sup, coop: dsm.coop, total: dsm.total });
+        const rowsEl = frs.map((f) => el('tr', {}, el('th', {}, f.name), td(f.req || null), td(f.biz), dm(), dm(), dm(), td(f.sup), td(f.coop), td(f.total, 'b')));
         const zonedStf = (staffRows || []).filter((x) => x.division_id === d.id && tIn(x.shift) && zs.some((z) => z.id === x.zone_id)).length;
         const freeStf = (dsm.stf || 0) - zonedStf;
-        if (freeStf > 0) rowsEl.push(el('tr', { class: 'admrow' }, el('th', {}, '관리(구역 미배치)'), td(null), td(staffBucket === 'biz' ? freeStf : 0), td(staffBucket === 'sup' ? freeStf : 0), td(0), el('td', { class: 'dim' }, '-'), el('td', { class: 'dim' }, '-'), td(freeStf, 'b')));
-        if (dsm.adm) rowsEl.push(el('tr', { class: 'admrow' }, el('th', {}, '행정(지원)'), td(null), td(0), td(dsm.adm), td(0), el('td', { class: 'dim' }, '-'), el('td', { class: 'dim' }, '-'), td(dsm.adm, 'b')));
-        rowsEl.push(el('tr', { class: 'sum' }, el('th', {}, '합계'), td(dq || null), td(dsm.biz), td(dsm.sup), td(dsm.coop), td(tt.length ? leaveN : null), el('td', { class: abAny && ab ? 'pc low' : '' }, abAny ? String(ab) : '-'), td(dsm.total, 'b')));
+        if (freeStf > 0) rowsEl.push(el('tr', { class: 'admrow' }, el('th', {}, '관리(구역 미배치)'), td(null), td(staffBucket === 'biz' ? freeStf : 0), dm(), dm(), dm(), td(staffBucket === 'sup' ? freeStf : 0), td(0), td(freeStf, 'b')));
+        if (dsm.adm) rowsEl.push(el('tr', { class: 'admrow' }, el('th', {}, '행정(지원)'), td(null), td(0), dm(), dm(), dm(), td(dsm.adm), td(0), td(dsm.adm, 'b')));
+        rowsEl.push(el('tr', { class: 'sum' }, el('th', {}, '합계'), td(dq || null), td(W), td(L), td(AB), td(GY), td(dsm.sup), td(dsm.coop), td(dsm.total, 'b')));
         flCard.append(el('h3', { class: 'divh2 ' + divTone(d.id) }, d.name),
           el('div', { class: 'tblwrap' }, el('table', { class: 'tbl fltbl' },
-            el('thead', {}, el('tr', {}, el('th', {}, '층'), el('th', {}, '정원'), el('th', {}, '근무'), el('th', {}, '지원'), el('th', {}, '협정'), el('th', {}, '휴무외'), el('th', {}, '결근'), el('th', {}, '계'))),
+            el('thead', {}, el('tr', {}, ...['층', '정원', '근무', '휴무외', '결근', '계', '지원', '협정', '투입'].map((h, i) => el('th', { class: i === 6 ? 'gl' : '' }, h)))),
             el('tbody', {}, rowsEl))));
       }
       {
         const nz = (arr, k) => (arr.some((x) => x[k] != null) ? arr.reduce((n, x) => n + (x[k] || 0), 0) : null);
         const cell = (v, cls) => el('td', cls ? { class: cls } : {}, v == null ? '-' : String(v));
-        const srows2 = dsum.map((x) => el('tr', {}, el('th', { class: divTone(x.d.id) }, shortDiv(x.d.name)), cell(x.dq || null), cell(x.biz), cell(x.sup), cell(x.coop), cell(x.leave), cell(x.ab), cell(x.total, 'b')));
-        const T = { dq: nz(dsum.map((x) => ({ v: x.dq || null })), 'v'), biz: nz(dsum, 'biz'), sup: nz(dsum, 'sup'), coop: nz(dsum, 'coop'), leave: nz(dsum, 'leave'), ab: nz(dsum, 'ab'), total: nz(dsum, 'total') };
-        if (dsum.length > 1) srows2.push(el('tr', { class: 'sum' }, el('th', {}, '전체'), cell(T.dq), cell(T.biz), cell(T.sup), cell(T.coop), cell(T.leave), cell(T.ab), cell(T.total, 'b')));
+        const rate = (x) => { const p = pct(x.total, x.dq); return el('td', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%'); };
+        const srows2 = dsum.map((x) => el('tr', {}, el('th', { class: divTone(x.d.id) }, shortDiv(x.d.name)), cell(x.dq || null), cell(x.biz), cell(x.leave), cell(x.ab), cell(x.gye), cell(x.sup, 'gl'), cell(x.coop), cell(x.total, 'b'), rate(x)));
+        const T = { dq: nz(dsum.map((x) => ({ v: x.dq || null })), 'v'), biz: nz(dsum, 'biz'), sup: nz(dsum, 'sup'), coop: nz(dsum, 'coop'), leave: nz(dsum, 'leave'), ab: nz(dsum, 'ab'), gye: nz(dsum, 'gye'), total: nz(dsum, 'total') };
+        if (dsum.length > 1) srows2.push(el('tr', { class: 'sum' }, el('th', {}, '전체'), cell(T.dq), cell(T.biz), cell(T.leave), cell(T.ab), cell(T.gye), cell(T.sup, 'gl'), cell(T.coop), cell(T.total, 'b'), rate({ total: T.total || 0, dq: T.dq || 0 })));
         const sumTbl = el('div', { class: 'tblwrap' }, el('table', { class: 'tbl fltbl flsum' },
-          el('thead', {}, el('tr', {}, ...['구분', '정원', '근무', '지원', '협정', '휴무외', '결근', '계'].map((h) => el('th', {}, h)))),
+          el('thead', {}, el('tr', {}, ...['구분', '정원', '근무', '휴무외', '결근', '계', '지원', '협정', '투입', '비율'].map((h, i) => el('th', { class: i === 6 ? 'gl' : '' }, h)))),
           el('tbody', {}, srows2)));
-        const MODES = [['daily', '일일근무정원'], ['full', '상근정원'], ['custom', '직접 입력']];
+        const MODES = [['roster', '사업부 전체 인원'], ['daily', '일일근무정원'], ['full', '상근정원'], ['custom', '직접 입력']];
         const canEdit = isMaster(me);
         const saveRatio = async (cfg) => {
           const { error } = await sb.from('settings').upsert({ key: 'ratio_base', value: cfg, note: '현황 비율 기준' }, { onConflict: 'key' });
@@ -530,9 +536,9 @@
         const sumWrap = el('div', { class: 'sumwrap' }, panelOn ? ratioBar : null, panelOn ? customBox : null, panelOn ? staffBar : null, sumTbl);
         const oldTbl = tilesRow.querySelector('.tblwrap'); if (oldTbl) oldTbl.replaceWith(sumWrap);
         const oldSup = tilesRow.querySelector('.gsup');
-        if (oldSup) oldSup.replaceChildren(...[['근무', T.biz], ['지원', T.sup], ['협정', T.coop], ['총계', T.total]].map(([n, v]) => el('div', {}, el('b', {}, `${v || 0}명`), el('small', {}, n))));
+        if (oldSup) oldSup.replaceChildren(...[['근무', T.biz], ['지원', T.sup], ['협정', T.coop], ['투입', T.total]].map(([n, v]) => el('div', {}, el('b', {}, `${v || 0}명`), el('small', {}, n))));
       }
-      flCard.append(el('p', { class: 'hint' }, '층 정원 = 구역 필요 인원 · 합계 정원 = 일일근무정원 · 휴무외 = 휴무·연차·병가·기타 · 휴무외·결근은 팀 기준이라 합계 행에만 표시'));
+      flCard.append(el('p', { class: 'hint' }, '정원 = 사업부 전체 인원(휴무계획) · 근무 = 출근 인원 · 휴무외 = 연차·휴무·병가·보건휴가·휴직 등 · 결근 = 정원 − 근무 − 휴무외(파업 참여·출근 배치가 안 된 인원) · 계 = 근무+휴무외+결근 · 지원(경영본부·사업본부·행정 등)·협정은 사업부 인력이 아니라 정원에 포함되지 않음 · 투입 = 근무+지원+협정 · 비율 = 투입 ÷ 정원 · 층별 줄의 정원은 구역 필요 인원, 휴무외·결근·계는 합계 행에만 표시'));
       // 부족 구역 강조
       const lacks = shortages(divs, zones, rows, basis);
       const lackSet = new Set(lacks.map((l) => l.zone.id));
@@ -588,26 +594,37 @@
       const render = (zones, rows, quota) => {
         const divs = (o.division === 'all' ? bizDivs() : bizDivs().filter((d) => d.id === o.division));
         const basis = o.basis; const inB = (x) => basis.includes(x.shift);
+        const tInB = (sh) => basis.includes(sh) || ((sh == null || sh === '미지정') && basis.length >= shiftList().length);
+        const rosterB = (dv) => (teamRows || []).filter((t) => t.division_id === dv && tInB(t.shift) && String(t.team || '').trim() !== '행정').reduce((n, t) => n + t.roster, 0);
+        const quotaB = (dv) => {   // 홈 화면과 같은 정원 기준
+          if (ratioCfg.mode === 'custom' && Number(ratioCfg.custom[dv]) > 0) return Number(ratioCfg.custom[dv]);
+          if (ratioCfg.mode === 'full') { const f = quota.filter((x) => x.division_id === dv && basis.includes(x.shift)).reduce((t, x) => t + (x.full_quota || 0), 0); if (f > 0) return f; }
+          if (ratioCfg.mode !== 'roster') { const v = quotaSumRaw(quota, dv, basis); if (v > 0) return v; }
+          const r0 = rosterB(dv); return r0 > 0 ? r0 : quotaSumRaw(quota, dv, basis);
+        };
         const calc = (d) => {
           const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const admN = (rosterRows || []).filter((r) => r.division_id === d.id && String(r.team || '').trim() === '행정' && r.checked && basis.includes(r.shift)).length; sm.sup += admN;
           const ks = (staffRows || []).filter((x) => x.division_id === d.id && basis.includes(x.shift)); sm.total += admN + ks.length;
           for (const x of ks) { const b = x.zone_id ? (SUPZ.has(x.zone_id) ? 'sup' : 'biz') : staffBucket; if (b === 'biz') sm.biz += 1; else sm.sup += 1; }
-          const qq = quotaSum(quota, d.id, basis); return { d, sm, qq, p: pct(sm.total, qq) };
+          const qq = quotaB(d.id);
+          const tt = (teamRows || []).filter((t) => t.division_id === d.id && (basis.includes(t.shift) || (t.shift == null && basis.length >= shiftList().length) || (t.shift === '미지정' && basis.length >= shiftList().length)) && String(t.team || '').trim() !== '행정');
+          const lv = tt.reduce((n, t) => n + t.absent, 0); const ab = qq > 0 ? Math.max(0, qq - sm.biz - lv) : 0;
+          return { d, sm, qq, lv, ab, p: pct(sm.total, qq) };
         };
         const L = divs.map(calc);
-        const T = L.reduce((t, x) => ({ total: t.total + x.sm.total, biz: t.biz + x.sm.biz, sup: t.sup + x.sm.sup, coop: t.coop + x.sm.coop, q: t.q + x.qq }), { total: 0, biz: 0, sup: 0, coop: 0, q: 0 });
+        const T = L.reduce((t, x) => ({ total: t.total + x.sm.total, biz: t.biz + x.sm.biz, sup: t.sup + x.sm.sup, coop: t.coop + x.sm.coop, q: t.q + x.qq, lv: t.lv + x.lv, ab: t.ab + x.ab }), { total: 0, biz: 0, sup: 0, coop: 0, q: 0, lv: 0, ab: 0 });
         const tp = pct(T.total, T.q);
         const hero = el('div', { class: 'bhero' },
-          el('div', { class: 'hl' }, el('div', { class: 'bname' }, '환경미화 전체 인력현황'),
+          el('div', { class: 'hl' }, el('div', { class: 'bname' }, '환경미화 전체 투입 현황 (근무+지원+협정)'),
             el('div', { class: 'bbig' }, String(T.total), el('small', {}, `명 / 정원 ${T.q || '-'}명`))),
           el('div', { class: 'hr' }, el('div', { class: 'bpct pc ' + tone(tp) }, tp == null ? '-' : tp + '%'),
             el('div', { class: 'hbar w' + (Math.round(Math.min(100, tp || 0) / 5) * 5) }, el('i', { class: 'f ' + tone(tp) })),
-            el('div', { class: 'hsub' }, el('span', {}, '사업부 현장 ', el('b', {}, String(T.biz))), el('span', {}, '지원 ', el('b', {}, String(T.sup))), el('span', {}, '협정 ', el('b', {}, String(T.coop))))));
-        const cards = L.map(({ d, sm, qq, p }) => el('div', { class: 'bcard ' + divTone(d.id) },
+            el('div', { class: 'hsub' }, el('span', {}, '근무 ', el('b', {}, String(T.biz))), el('span', {}, '휴무외 ', el('b', {}, String(T.lv))), el('span', {}, '결근 ', el('b', { class: 'hab' }, String(T.ab))), el('span', { class: 'hgap' }, '지원 ', el('b', {}, String(T.sup))), el('span', {}, '협정 ', el('b', {}, String(T.coop))))));
+        const cards = L.map(({ d, sm, qq, lv, ab, p }) => el('div', { class: 'bcard ' + divTone(d.id) },
           el('div', { class: 'bname' }, shortDiv(d.name)),
           el('div', { class: 'bbig' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),
           el('div', { class: 'bpct pc ' + tone(p) }, p == null ? '-' : p + '%'),
-          el('div', { class: 'bsub' }, `사업부 ${sm.biz} · 지원 ${sm.sup} · 협정 ${sm.coop}`)));
+          el('div', { class: 'bsub' }, `근무 ${sm.biz} · 휴무외 ${lv} · 결근 ${ab}`), el('div', { class: 'bsub' }, `지원 ${sm.sup} · 협정 ${sm.coop}`)));
         const evCell = (k, div) => { const c = incCnt(k, div); return el('td', {}, el('span', { class: 'n new' }, '접수 ', el('b', {}, String(c.new))), el('span', { class: 'n doing' }, '조치 ', el('b', {}, String(c.doing))), el('span', { class: 'n done' }, '완료 ', el('b', {}, String(c.done)))); };
         const evRow = (name, div, cls) => el('tr', { class: cls || '' }, el('th', { scope: 'row' }, name), ...KIND_L.map(([k]) => evCell(k, div)));
         const evCard = el('div', { class: 'black bsec' }, el('h2', {}, '이벤트 (불법행위 · 업무방해)'),

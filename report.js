@@ -18,7 +18,7 @@
     const inB = (x) => basis.includes(x.shift);
     const divs = bizDivs();
     const sumRows = divs.map((dv) => {
-      const s = O.sumBy(rows, (x) => x.division_id === dv.id && inB(x)); const qq = O.quotaSum(quota, dv.id, basis);
+      const s = O.sumBy(rows, (x) => x.division_id === dv.id && inB(x)); const q0 = O.quotaSum(quota, dv.id, basis); const r0 = (d.roster || []).filter((x) => x.division_id === dv.id && (basis.includes(x.shift) || (!x.shift && basis.length >= 4))).reduce((n, x) => n + (x.roster || 0), 0); const qq = r0 > 0 ? r0 : q0;   // 정원 = 사업부 전체 인원(휴무계획), 저장본에 없으면 일일근무정원
       return { name: shortDiv(dv.name), tone: divTone(dv.id), biz: s.biz, sup: s.sup, coop: s.coop, total: s.total, quota: qq, pct: O.pct(s.total, qq) };
     });
     const tot = sumRows.reduce((a, r) => ({ biz: a.biz + r.biz, sup: a.sup + r.sup, coop: a.coop + r.coop, total: a.total + r.total, quota: a.quota + r.quota }), { biz: 0, sup: 0, coop: 0, total: 0, quota: 0 });
@@ -49,7 +49,7 @@
   /* 화면·인쇄용 */
   function reportNode(m) {
     const th = (...h) => el('thead', {}, el('tr', {}, ...h.map((x) => el('th', {}, x))));
-    const sumTbl = el('table', { class: 'rtbl' }, th('구분', '현장투입', '행정인력', '협정사', '합계', '일일근무정원', '상근 대비'),
+    const sumTbl = el('table', { class: 'rtbl' }, th('구분', '근무', '지원', '협정', '투입', '정원', '비율(투입÷정원)'),
       el('tbody', {}, [...m.sumRows, m.tot].map((r, i, a) => el('tr', { class: i === a.length - 1 ? 'sum' : '' },
         el('th', { class: r.tone || '' }, r.name), el('td', {}, r.biz), el('td', {}, r.sup), el('td', {}, r.coop), el('td', { class: 'b' }, r.total), el('td', {}, r.quota || '-'), el('td', { class: 'b' }, pctTxt(r.pct))))));
     let prev = '';
@@ -63,7 +63,7 @@
       el('tbody', {}, m.att.map((r) => el('tr', {}, el('th', {}, r.name), el('td', {}, r.present == null ? '-' : r.present), ...ATT_COLS.map(([k]) => el('td', {}, r[k])), el('td', {}, r.src)))));
     return el('div', { class: 'rpt' },
       el('div', { class: 'rhead' }, el('h1', {}, m.title), el('p', {}, m.stamp), el('small', {}, `기준 근무조: ${m.basis.join('·') || '없음'} · 협정 출근 ${m.coopIn}명`)),
-      el('section', {}, el('h3', {}, '1. 사업부별 근무 인원'), sumTbl, el('p', { class: 'rnote' }, '상근 대비(%) = 근무 인원 합계 ÷ 기준 근무조의 일일근무정원')),
+      el('section', {}, el('h3', {}, '1. 사업부별 근무 인원'), sumTbl, el('p', { class: 'rnote' }, '정원 = 사업부 전체 인원(휴무계획) · 투입 = 근무+지원+협정 · 비율 = 투입 ÷ 정원')),
       el('section', { class: 'grow' }, el('h3', {}, '2. 구역별 근무 인원'), zTbl),
       el('section', {}, el('h3', {}, '3. 출근 현황'), attTbl, el('p', { class: 'rnote' }, '출처 "자동" = 업로드한 휴무계획·ERP 근태 집계, "입력" = 팀장이 입력한 값')),
       el('div', { class: 'rfoot' }, '인천공항운영서비스'));
@@ -74,7 +74,7 @@
     const rowOf = (r, last) => [{ v: r.name, s: last ? 'sumtxt' : 'txt' }, ...[r.biz, r.sup, r.coop, r.total].map((v) => ({ v, s: last ? 'sumnum' : 'num' })), { v: r.quota || 0, s: last ? 'sumnum' : 'num' }, { v: r.pct == null ? '-' : r.pct / 100, s: r.pct == null ? 'txt' : 'pct' }];
     const s1 = { name: '사업부별', widths: [16, 12, 12, 12, 12, 14, 12], merges: ['A1:G1'], rows: [
       [{ v: `${m.title} - ${m.stamp}`, s: 'title' }], [`기준 근무조: ${m.basis.join('·')}`], [],
-      ['구분', '현장투입', '행정인력', '협정사', '합계', '일일근무정원', '상근 대비'].map(H),
+      ['구분', '근무', '지원', '협정', '투입', '정원', '비율(투입÷정원)'].map(H),
       ...m.sumRows.map((r) => rowOf(r, false)), rowOf(m.tot, true)] };
     const s2 = { name: '구역별', widths: [14, 14, 28, 8, 12, 8, 8, 8, 10], rows: [
       ['사업부', '구분·층', '구역', '필요', '현장투입', '행정', '협정', '합계', '달성'].map(H),
@@ -131,7 +131,7 @@
         return el('tr', {}, el('th', {}, name), ...vals.map((v) => el('td', {}, fmt(v))), el('td', { class: 'b ' + (d > 0 ? 'up' : d < 0 ? 'down' : '') }, d > 0 ? `+${d}` : String(d))); };
       const sumRow = (m, n) => (n === '소계' ? m.tot : m.sumRows.find((r) => r.name === n));
       const trs = [...names.map((n) => rowOf(n, (m, k) => sumRow(m, k).total, String)), rowOf('소계', (m, k) => sumRow(m, k).total, String),
-        rowOf('상근 대비 %(소계)', (m) => m.tot.pct || 0, (v) => v + '%'),
+        rowOf('비율 %(투입÷정원, 소계)', (m) => m.tot.pct || 0, (v) => v + '%'),
         rowOf('부족 구역 수', (m) => m.zoneRows.filter((z) => z.required > 0 && z.total < z.required).length, String)];
       cmpHolder.replaceChildren(el('div', { class: 'tblwrap' }, el('table', { class: 'tbl cmp' }, el('thead', {}, head), el('tbody', {}, trs))),
         el('p', { class: 'hint' }, '각 저장본은 그 시각의 기준 근무조(08:30·11:00=오전+일근, 12:30=오전+오후+일근, 22:00=오후+야간)로 계산한 인원입니다'));
@@ -161,7 +161,7 @@
             toast('삭제했습니다'); S.sel = null; redraw();
           }));
           holder.replaceChildren(el('div', { class: 'card' }, el('h2', {}, `${full.label} 저장본`),
-            el('div', { class: 'f' }, el('span', { class: 'hint' }, '상근 대비 기준 근무조'), chips),
+            el('div', { class: 'f' }, el('span', { class: 'hint' }, '비율 기준 근무조'), chips),
             el('div', { class: 'btnrow' }, xl, pdf, del)),
             el('div', { class: 'card rptwrap' }, reportNode(m)));
         };
