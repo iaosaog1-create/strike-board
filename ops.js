@@ -86,6 +86,16 @@
     return el('div', { class: 'card pick' }, ...parts);
   }
   const loading = () => el('p', { class: 'empty' }, '불러오는 중…');
+  /* team_roster 는 한 번에 1000행까지만 오므로 끝까지 이어 받음 */
+  const rosterPaged = async (date, soft) => {
+    const out = []; const N = 1000;
+    for (let from = 0; from < 20000; from += N) {
+      const r = await sb.rpc('team_roster', { p_date: date, p_team: null }).range(from, from + N - 1);
+      if (r.error) { if (soft) return []; throw r.error; }
+      const d = r.data || []; out.push(...d); if (d.length < N) break;
+    }
+    return out;
+  };
   const q = async (p) => { const r = await p; if (r.error) throw r.error; return r.data || []; };
   const loadZones = (div, activeOnly = true) => q(sb.from('zones')
     .select('id,division_id,side,floor,area,team,label,task,required,active').eq('division_id', div).eq('active', true));
@@ -125,7 +135,7 @@
     const redraw = () => inputView(body);
     body.replaceChildren(pickers(o, redraw), loading());
     let zones, latest, quota; let rosterAll = [];
-    try { let tsm; [zones, latest, quota, tsm, rosterAll] = await Promise.all([loadZones(o.division), loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).eq('source', '사업부')), loadQuota(), loadTeamShift(o.division), sb.rpc('team_roster', { p_date: o.date, p_team: null }).then((r) => (r.error ? [] : r.data || []), () => [])]); zones = teamFilter(zones, tsm, o.shift); }
+    try { let tsm; [zones, latest, quota, tsm, rosterAll] = await Promise.all([loadZones(o.division), loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).eq('source', '사업부')), loadQuota(), loadTeamShift(o.division), rosterPaged(o.date, true)]); zones = teamFilter(zones, tsm, o.shift); }
     catch (e) { body.replaceChildren(pickers(o, redraw), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); return; }
     const last = new Map(latest.map((r) => [r.zone_id, r]));
     const lastAt = latest.reduce((m, r) => (r.entered_at > m ? r.entered_at : m), '');
@@ -133,7 +143,7 @@
 
     // 근무 가능 인원 = 이 사업부·근무조 휴무계획 명단에서 근태(휴무·연차 등)와 행정 팀을 뺀 인원. 명단이 없으면 제한하지 않음
     const OFFK0 = ['off', 'hold', 'annual', 'health', 'sick', 'other'];
-    const rs0 = (rosterAll || []).filter((r) => r.division_id === o.division && r.shift === o.shift && String(r.team || '').trim() !== '행정');
+    const rs0 = (rosterAll || []).filter((r) => r.division_id === o.division && r.shift === o.shift && !/^행정/.test(String(r.team || '').trim()));
     const avail = rs0.length ? rs0.filter((r) => !OFFK0.includes(r.leave_kind)).length : null;
     const inputs = new Map();
     const totalEl = el('b', {});
@@ -305,7 +315,7 @@
           loadLatest(o.date, o.division === 'all' ? null : o.division), loadQuota(),
           sb.rpc('leave_team', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null),
           sb.from('attendance_latest').select('division_id,shift,present,day_off,annual,health,leave_long,sick,other').eq('work_date', o.date).then((r) => (r.error ? [] : r.data || []), () => []),
-          sb.rpc('team_roster', { p_date: o.date, p_team: null }).then((r) => (r.error ? [] : r.data || []), () => []),
+          rosterPaged(o.date, true),
           sb.from('settings').select('key,value').eq('key', 'ratio_base').then((r) => (r.error || !r.data || !r.data[0] ? null : r.data[0].value), () => null),
           sb.rpc('staff_checkins', { p_date: o.date }).then((r) => (r.error ? [] : r.data || []), () => []),
           sb.from('settings').select('key,value').eq('key', 'staff_bucket').then((r) => (r.error || !r.data || !r.data[0] ? null : r.data[0].value), () => null),
@@ -313,7 +323,7 @@
           sb.from('team_shift').select('division_id,team,shift,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => []),
           sb.rpc('union_status', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null)]);
       // 같은 사람이 휴무계획 '행정' 팀 출근과 관리자 출근에 모두 잡히면 한 번만 집계 (행정 팀 쪽을 남김)
-      const admNames = new Set((rosterRows || []).filter((r) => String(r.team || '').trim() === '행정' && r.checked).map((r) => r.name));
+      const admNames = new Set((rosterRows || []).filter((r) => /^행정/.test(String(r.team || '').trim()) && r.checked).map((r) => r.name));
       staffRows = (staffRows || []).filter((x) => !admNames.has(x.name));
       staffBucket = staffV && staffV.bucket === 'biz' ? 'biz' : 'sup';
       if (ratioV && typeof ratioV === 'object') ratioCfg = { mode: ['roster', 'daily', 'full', 'custom'].includes(ratioV.mode) ? ratioV.mode : 'roster', custom: ratioV.custom || {} };
@@ -367,7 +377,7 @@
       const zInB = (z) => { const sh = tShiftOf(z); return !sh || basis.includes(sh); };
       const allDay = basis.length >= shiftList().length;
       const tIn = (s) => basis.includes(s) || (s === '미지정' && allDay);
-      const isAdm = (t) => String(t || '').trim() === '행정';
+      const isAdm = (t) => /^행정/.test(String(t || '').trim());
       // 행정 팀 출근 체크 인원 = 지원으로 집계
       const admOf = (d) => (rosterRows || []).filter((r) => r.division_id === d && isAdm(r.team) && r.checked && tIn(r.shift)).length;
       const staffOf = (d) => (staffRows || []).filter((x) => x.division_id === d && tIn(x.shift)).length;
@@ -638,7 +648,7 @@
         const divs = (o.division === 'all' ? bizDivs() : bizDivs().filter((d) => d.id === o.division));
         const basis = o.basis; const inB = (x) => basis.includes(x.shift);
         const tInB = (sh) => basis.includes(sh) || ((sh == null || sh === '미지정') && basis.length >= shiftList().length);
-        const rosterB = (dv) => (teamRows || []).filter((t) => t.division_id === dv && tInB(t.shift) && String(t.team || '').trim() !== '행정').reduce((n, t) => n + t.roster, 0);
+        const rosterB = (dv) => (teamRows || []).filter((t) => t.division_id === dv && tInB(t.shift) && !/^행정/.test(String(t.team || '').trim())).reduce((n, t) => n + t.roster, 0);
         const quotaB = (dv) => {   // 홈 화면과 같은 정원 기준
           if (ratioCfg.mode === 'custom' && Number(ratioCfg.custom[dv]) > 0) return Number(ratioCfg.custom[dv]);
           if (ratioCfg.mode === 'full') { const f = quota.filter((x) => x.division_id === dv && basis.includes(x.shift)).reduce((t, x) => t + (x.full_quota || 0), 0); if (f > 0) return f; }
@@ -646,11 +656,11 @@
           const r0 = rosterB(dv); return r0 > 0 ? r0 : quotaSumRaw(quota, dv, basis);
         };
         const calc = (d) => {
-          const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const admN = (rosterRows || []).filter((r) => r.division_id === d.id && String(r.team || '').trim() === '행정' && r.checked && basis.includes(r.shift)).length; sm.sup += admN;
+          const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const admN = (rosterRows || []).filter((r) => r.division_id === d.id && /^행정/.test(String(r.team || '').trim()) && r.checked && basis.includes(r.shift)).length; sm.sup += admN;
           const ks = (staffRows || []).filter((x) => x.division_id === d.id && basis.includes(x.shift)); sm.total += admN + ks.length;
           for (const x of ks) { const b = x.zone_id ? (SUPZ.has(x.zone_id) ? 'sup' : 'biz') : staffBucket; if (b === 'biz') sm.biz += 1; else sm.sup += 1; }
           const qq = quotaB(d.id);
-          const tt = (teamRows || []).filter((t) => t.division_id === d.id && (basis.includes(t.shift) || (t.shift == null && basis.length >= shiftList().length) || (t.shift === '미지정' && basis.length >= shiftList().length)) && String(t.team || '').trim() !== '행정');
+          const tt = (teamRows || []).filter((t) => t.division_id === d.id && (basis.includes(t.shift) || (t.shift == null && basis.length >= shiftList().length) || (t.shift === '미지정' && basis.length >= shiftList().length)) && !/^행정/.test(String(t.team || '').trim()));
           const lv = tt.reduce((n, t) => n + t.absent, 0); const ab = qq > 0 ? Math.max(0, qq - sm.biz - lv) : 0;
           return { d, sm, qq, lv, ab, p: pct(sm.total, qq) };
         };

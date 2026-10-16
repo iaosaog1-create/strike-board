@@ -9,6 +9,16 @@
   const BLOCK = ['off', 'hold', 'annual', 'health', 'sick', 'other'];
   const KL = { off: '주휴', hold: '휴직', annual: '연차', health: '보건·검진', sick: '병가', other: '기타', half: '반차' };
   const S = { date: null, tab: null, division: null, team: null, mark: null, key: '', zone: '', gedit: {} };
+  /* team_roster 는 한 번에 1000행까지만 오므로 끝까지 이어 받음 */
+  const rosterPaged = async (date, soft) => {
+    const out = []; const N = 1000;
+    for (let from = 0; from < 20000; from += N) {
+      const r = await sb.rpc('team_roster', { p_date: date, p_team: null }).range(from, from + N - 1);
+      if (r.error) { if (soft) return []; throw r.error; }
+      const d = r.data || []; out.push(...d); if (d.length < N) break;
+    }
+    return out;
+  };
   const q = async (p) => { const r = await p; if (r.error) throw r.error; return r.data || []; };
   const tnum = (t) => String(t || '').replace(/\D/g, '') || String(t || '').trim();
   const sortTeam = (a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true });
@@ -45,7 +55,7 @@
     let all, zones;
     try {
       [all, zones, S.ts, S.sup] = await Promise.all([
-        q(sb.rpc('team_roster', { p_date: S.date, p_team: null })),
+        rosterPaged(S.date),
         q(sb.from('zones').select('id,division_id,side,floor,area,team,label,task,required,active')),
         sb.from('team_shift').select('division_id,team,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => []),
         sb.rpc('list_team_support', { p_date: S.date }).then((r) => (r.error ? [] : r.data || []), () => [])]);
