@@ -220,26 +220,36 @@
 
   /* ---- 팀 구성: 휴무계획의 근무팀 → 근무조 ---- */
   async function teamPane(redraw) {
-    const saved = await q(sb.from('team_shift').select('team,shift').eq('division_id', S.div));
-    const names = [...new Set([...saved.map((x) => x.team), ...S.found])].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+    const saved = await q(sb.from('team_shift').select('team,shift,start_time,end_time,duty').eq('division_id', S.div));
+    let planTeams = [];
+    try { planTeams = (await q(sb.from('leave_plan').select('team').eq('division_id', S.div).limit(5000))).map((x) => x.team).filter(Boolean); } catch (e) { /* 저장된 휴무계획이 없으면 무시 */ }
+    const names = [...new Set([...saved.map((x) => x.team), ...planTeams, ...S.found])].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
     const cur = Object.fromEntries(names.map((n) => [n, (saved.find((x) => x.team === n) || {}).shift || '']));
+    const hm = (t) => (t ? String(t).slice(0, 5) : '');
+    const tm = Object.fromEntries(names.map((n) => { const r = saved.find((x) => x.team === n) || {}; return [n, { s: hm(r.start_time), e: hm(r.end_time), d: r.duty || '' }]; }));
     const list = el('div', {});
-    const drawList = () => list.replaceChildren(...(names.length ? names.map((n) => el('div', { class: 'teamrow' }, el('b', {}, n),
-      seg([['', '미지정'], ...shiftList().map((s) => [s, s])], cur[n], (v) => { cur[n] = v; }))) : [el('p', { class: 'empty' }, '휴무계획을 올리면 근무팀이 여기에 나타납니다. 아래에서 직접 추가할 수도 있습니다')]));
+    const drawList = () => list.replaceChildren(...(names.length ? names.map((n) => {
+      const si = el('input', { type: 'time', 'aria-label': `${n} 출근시간`, value: tm[n].s }); si.addEventListener('input', () => { tm[n].s = si.value; });
+      const ei = el('input', { type: 'time', 'aria-label': `${n} 퇴근시간`, value: tm[n].e }); ei.addEventListener('input', () => { tm[n].e = ei.value; });
+      const di = el('input', { type: 'text', maxlength: '60', 'aria-label': `${n} 담당`, placeholder: '담당 (예: 탑승동 오전)', value: tm[n].d }); di.addEventListener('input', () => { tm[n].d = di.value; });
+      return el('div', { class: 'teamrow' }, el('b', {}, n),
+        seg([['', '미지정'], ...shiftList().map((s) => [s, s])], cur[n], (v) => { cur[n] = v; }),
+        el('div', { class: 'tmtime' }, el('label', {}, el('span', {}, '출근'), si), el('label', {}, el('span', {}, '퇴근'), ei)), el('div', { class: 'tmduty' }, di));
+    }) : [el('p', { class: 'empty' }, '휴무계획을 올리면 근무팀이 여기에 나타납니다. 아래에서 직접 추가할 수도 있습니다')]));
     drawList();
     const nIn = el('input', { type: 'text', maxlength: '20', placeholder: '예: 1팀', 'aria-label': '팀 이름' });
     const add = el('button', { class: 'btn ghost sm', type: 'button' }, '팀 추가');
-    add.addEventListener('click', () => { const n = nIn.value.trim(); if (!n) return; if (!names.includes(n)) { names.push(n); cur[n] = ''; } nIn.value = ''; drawList(); });
+    add.addEventListener('click', () => { const n = nIn.value.trim(); if (!n) return; if (!names.includes(n)) { names.push(n); cur[n] = ''; tm[n] = { s: '', e: '', d: '' }; } nIn.value = ''; drawList(); });
     const save = el('button', { class: 'btn', type: 'button' }, '팀 구성 저장');
     save.addEventListener('click', busy(save, async () => {
-      const up = names.filter((n) => cur[n]).map((n) => ({ division_id: S.div, team: n, shift: cur[n] }));
+      const up = names.filter((n) => cur[n]).map((n) => ({ division_id: S.div, team: n, shift: cur[n], start_time: tm[n].s || null, end_time: tm[n].e || null, duty: tm[n].d.trim() || null }));
       const del = names.filter((n) => !cur[n] && saved.some((x) => x.team === n));
-      if (up.length) { const { error } = await sb.from('team_shift').upsert(up, { onConflict: 'division_id,team' }); if (error) return toast('저장하지 못했습니다. 권한을 확인하세요', 'err'); }
+      if (up.length) { const { error } = await sb.from('team_shift').upsert(up, { onConflict: 'division_id,team' }); if (error) return toast('저장하지 못했습니다. 16 SQL 실행 여부와 권한을 확인하세요', 'err'); }
       for (const n of del) { const { error } = await sb.from('team_shift').delete().eq('division_id', S.div).eq('team', n); if (error) return toast('저장하지 못했습니다', 'err'); }
       toast('팀 구성을 저장했습니다'); redraw();
     }));
     return el('div', { class: 'card' }, el('h2', {}, '팀 구성'),
-      el('p', { class: 'hint' }, '휴무계획의 근무팀(1팀, 2팀…)이 어느 근무조인지 정합니다. 휴무계획 파일에 근무구분 열이 있으면 그 값이 먼저 쓰입니다.'),
+      el('p', { class: 'hint' }, '휴무계획의 근무팀(1팀, 2팀…)이 어느 근무조인지 정하고, 팀별 출근·퇴근 시간을 직접 수정합니다. 시간을 비워 두면 근무조 기본 시간이 쓰입니다. 휴무계획 파일에 근무구분 열이 있으면 그 값이 먼저 쓰입니다.'),
       list, el('div', { class: 'addrow' }, nIn, add), save);
   }
 

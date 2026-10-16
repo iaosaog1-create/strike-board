@@ -44,9 +44,10 @@
     body.replaceChildren(el('p', { class: 'empty' }, '불러오는 중…'));
     let all, zones;
     try {
-      [all, zones] = await Promise.all([
+      [all, zones, S.ts] = await Promise.all([
         q(sb.rpc('team_roster', { p_date: S.date, p_team: null })),
-        q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active'))]);
+        q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active')),
+        sb.from('team_shift').select('division_id,team,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => [])]);
     } catch (e) { body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 08·09 SQL 실행 여부를 확인하세요')); return; }
 
     if (me.role === 'leader' && !me.plan_team) {
@@ -89,7 +90,7 @@
         const rs = divRows.filter((r) => (r.team || '미지정') === t); const k = tally(rs);
         const stat = k.closed ? ['완료', 'ok'] : k.present ? ['진행 중', 'mid'] : ['시작 전', 'none'];
         const tr = el('tr', { class: 'click', onclick: () => { S.team = t; S.tab = 'check'; S.mark = null; redraw(); } },
-          el('th', {}, t), el('td', {}, (rs[0] || {}).shift || '-'), el('td', {}, k.total), el('td', {}, k.leave), el('td', { class: 'b' }, k.present),
+          el('th', {}, t, (() => { const r = (S.ts || []).find((x) => x.division_id === S.division && tnum(x.team) === tnum(t)); return r && (r.start_time || r.end_time) ? el('small', { class: 'tmsm' }, `${r.start_time ? String(r.start_time).slice(0, 5) : '--:--'}~${r.end_time ? String(r.end_time).slice(0, 5) : '--:--'}${r.duty ? ' ' + r.duty : ''}`) : null; })()), el('td', {}, (rs[0] || {}).shift || '-'), el('td', {}, k.total), el('td', {}, k.leave), el('td', { class: 'b' }, k.present),
           el('td', { class: k.closed ? 'pc low' : '' }, k.closed ? k.rest : `(${k.rest})`), el('td', { class: 'pc ' + stat[1] }, stat[0]));
         return tr;
       });
@@ -229,7 +230,7 @@
   const ROLE_NAME = { master: '최고관리자', admin: '관리자', chief: '총괄팀장' };
   async function staffPanel(body, redrawAll) {
     const me = state.me; await O.ensureShifts();
-    const canEdit = me.role === 'master' || me.role === 'admin';
+    const canEdit = me.role === 'master' || me.role === 'admin';   // 다른 사람 대리 체크·위치 이동
     if (!S.date) S.date = O.today();
     if (!ST.div) ST.div = (bizDivs().find((d) => d.id === me.division_id) || bizDivs()[0] || {}).id;
     if (!ST.shift) ST.shift = O.basisFor(null)[0] || O.shiftList()[0];
@@ -256,21 +257,21 @@
         Object.assign(r, on ? { checked: true, division_id: ST.div, shift: ST.shift, zone_id: ST.zone ? Number(ST.zone) : null } : { checked: false, division_id: null, shift: null, zone_id: null });
         draw();
       };
-      const cards = rows.map((r) => el('button', { type: 'button', class: 'pp gx' + (r.checked ? ' on' : ''), disabled: !canEdit, 'aria-pressed': String(!!r.checked), onclick: () => mark(r) },
-        el('b', {}, r.name), el('small', {}, r.checked ? `✔ ${shortDiv(divName(r.division_id))} ${r.shift}` : ROLE_NAME[r.role] || '')));
+      const cards = rows.map((r) => el('button', { type: 'button', class: 'pp gx' + (r.checked ? ' on' : '') + (r.user_id === me.id ? ' me' : ''), disabled: !(canEdit || r.user_id === me.id), 'aria-pressed': String(!!r.checked), onclick: () => mark(r) },
+        el('b', {}, r.name), el('small', {}, r.checked ? `✔ ${shortDiv(divName(r.division_id))} ${r.shift}` : (r.user_id === me.id ? '내 출근 ▶' : ROLE_NAME[r.role] || ''))));
       const on = rows.filter((r) => r.checked);
       const byDiv = bizDivs().map((d) => [d, on.filter((r) => r.division_id === d.id)]).filter(([, l]) => l.length);
       const top = el('div', { class: 'card' },
         el('div', { class: 'datebar' }, el('button', { type: 'button', class: 'btn ghost sm', onclick: stepD(-1) }, '‹'), dIn,
           el('button', { type: 'button', class: 'btn ghost sm', onclick: stepD(1) }, '›'),
           el('button', { type: 'button', class: 'btn ghost sm', onclick: () => { S.date = O.today(); staffPanel(body, redrawAll); } }, '오늘')),
-        canEdit ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '① 근무 사업부'), seg(bizDivs().map((d) => [String(d.id), shortDiv(d.name)]), String(ST.div), (v) => { ST.div = Number(v); ST.zone = ''; draw(); })) : null,
-        canEdit ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '② 근무조'), seg(O.shiftList().map((x) => [x, x]), ST.shift, (v) => { ST.shift = v; draw(); })) : null,
-        canEdit ? el('div', { class: 'f' }, el('span', { class: 'hint' }, '③ 배치 구역'), zsel) : null);
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, '① 근무 사업부'), seg(bizDivs().map((d) => [String(d.id), shortDiv(d.name)]), String(ST.div), (v) => { ST.div = Number(v); ST.zone = ''; draw(); })),
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, '② 근무조'), seg(O.shiftList().map((x) => [x, x]), ST.shift, (v) => { ST.shift = v; draw(); })),
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, '③ 배치 구역'), zsel));
       body.replaceChildren(top,
         el('div', { class: 'ck-tiles' }, tile('대상', rows.length), tile('출근', on.length, 'ok'), tile('미출근', rows.length - on.length, rows.length - on.length ? 'mid' : ''), tile('구역 배치', on.filter((r) => r.zone_id).length)),
         el('div', { class: 'card' }, el('h2', {}, '관리자 출근 체크'),
-          canEdit ? el('p', { class: 'hint' }, '근무 사업부·근무조·구역을 고른 뒤 이름을 누르세요. 같은 설정으로 다시 누르면 취소, 다른 설정이면 변경됩니다') : el('p', { class: 'hint' }, '조회만 가능합니다'),
+          el('p', { class: 'hint' }, canEdit ? '본인은 "내 출근" 카드를 눌러 출근합니다. 다른 사람은 사업부·근무조·구역을 고른 뒤 이름을 누르면 그 위치로 옮겨집니다. 같은 설정으로 다시 누르면 취소됩니다' : '근무 사업부·근무조·구역을 고른 뒤 내 이름 카드를 누르세요. 같은 설정으로 다시 누르면 취소, 다른 설정이면 변경됩니다. 다른 사람은 조회만 가능합니다'),
           el('div', { class: 'ppgrid' }, cards)),
         el('div', { class: 'card' }, el('h2', {}, '관리자 현황'),
           byDiv.length ? byDiv.map(([d, l]) => el('div', { class: 'f' }, el('span', { class: 'hint' }, `${d.name} · ${l.length}명`),

@@ -7,7 +7,7 @@
   });
 
   const TEAMS = ['오전', '오후', '야간', '일근', '운영'];
-  const PLAN_TEAMS = [...Array.from({ length: 10 }, (_, i) => `${i + 1}팀`), '행정'];   // 휴무계획의 팀
+  const PLAN_TEAMS = [...Array.from({ length: 12 }, (_, i) => `${i + 1}팀`), '행정'];   // 휴무계획의 팀
   const ROLE_LABEL = { master: '최고관리자', admin: '관리자', chief: '총괄팀장', leader: '팀장' };
   const TITLE_TO_ROLE = { '관리': 'admin', '팀장': 'leader', '총괄팀장': 'chief' };
   const ROLE_OPTIONS = [['leader', '팀장'], ['chief', '총괄팀장'], ['admin', '관리자']];
