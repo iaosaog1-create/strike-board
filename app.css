@@ -1060,3 +1060,7 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .qros{font-weight:600;color:var(--sub);font-size:11px}
 .qratio{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.qratio .f{margin:0;min-width:160px}
 .qlist{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7;color:var(--ink)}
+
+/* 저장·알림 문구: 화면 가운데에 크게 */
+.toast{bottom:auto;top:42%;transform:translate(-50%,-50%);width:max-content;max-width:86vw;font-size:21px;font-weight:700;padding:22px 30px;border-radius:20px;text-align:center;word-break:keep-all;box-shadow:0 10px 30px rgba(0,0,0,.28);background:#1F7A5C}
+.toast.err{background:var(--danger)}
