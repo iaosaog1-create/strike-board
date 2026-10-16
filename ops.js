@@ -1,4 +1,4 @@
-/* 현장 운영 화면: 인력 입력 · 출근 현황 · 구역 현황 · 협정/지원 배치 */
+/* 현장 운영 화면: 출근 현황 · 구역 현황 · 협정/지원 배치 */
 (() => {
   'use strict';
   const { sb, state, el, seg, busy, toast, register, numIn, toInt, bizDivs, divName, divTone, shortDiv } = window.APP;
@@ -206,13 +206,13 @@
       [cur, leave, dep, tms] = await Promise.all([
         q(sb.from('attendance_latest').select('*').eq('work_date', o.date).eq('division_id', o.division).eq('shift', o.shift)),
         sb.rpc('leave_counts', { p_date: o.date }).then((r) => (r.error ? [] : r.data || [])),
-        loadLatest(o.date, o.division, (r) => r.eq('shift', o.shift).eq('source', '사업부')),
+        rosterPaged(o.date, true),
         sb.rpc('leave_team', { p_date: o.date }).then((r) => (r.error ? [] : r.data || []), () => [])]);
     } catch (e) { body.replaceChildren(pickers(o, redraw), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); return; }
     const rosterN = (tms || []).filter((t) => t.division_id === o.division && t.shift === o.shift).reduce((n, t) => n + t.roster, 0);
     const row = cur[0] || null;
     const lv = leave.find((x) => x.division_id === o.division && x.shift === o.shift) || null;
-    const depSum = dep.reduce((t, r) => t + r.headcount, 0);
+    const depSum = dep.filter((r) => r.checked && r.division_id === o.division && r.shift === o.shift && !/^행정/.test(String(r.team || '').trim())).length;
     const autoVals = lv ? { day_off: lv.day_off, annual: lv.annual, health: lv.health, leave_long: lv.hold, sick: lv.sick, other: lv.other } : {};
     const inputs = {};
     const fill = (vals) => ATT_FIELDS.forEach(([k]) => { inputs[k].value = vals[k] == null ? '' : String(vals[k]); });
@@ -236,7 +236,7 @@
     ATT_FIELDS.forEach(([k]) => inputs[k].addEventListener('input', calcAbs)); calcAbs();
     const auto = el('button', { class: 'btn ghost sm', type: 'button', disabled: !lv }, '자동값 다시 채우기');
     auto.addEventListener('click', () => { fill(autoVals); calcAbs(); });
-    const sumBtn = el('button', { class: 'btn ghost sm', type: 'button' }, `인력 입력 합계(${depSum}명)로 출근 채우기`);
+    const sumBtn = el('button', { class: 'btn ghost sm', type: 'button' }, `출근 체크 합계(${depSum}명)로 출근 채우기`);
     sumBtn.addEventListener('click', () => { inputs.present.value = String(depSum); calcAbs(); });
     const save = el('button', { class: 'btn', type: 'button' }, '저장');
     save.addEventListener('click', busy(save, async () => {
@@ -262,6 +262,18 @@
      3) 구역 현황  (전체 역할 조회)
      ========================================================= */
   /* 집계: rows = deployments_latest 형식, basis = 근무조 배열 */
+  /* 구역별 사업부 투입 = 출근 체크의 구역 배치 (인력 입력 폐지). 지원·협정은 기존 입력 그대로 */
+  const viaCheck = (rows, roster, div) => {
+    const m = new Map();
+    for (const r of roster || []) {
+      if (!r.checked || !r.zone_id || /^행정/.test(String(r.team || '').trim())) continue;
+      if (div && div !== 'all' && r.division_id !== div) continue;
+      const k = `${r.division_id}|${r.shift || '미지정'}|${r.zone_id}`;
+      const c = m.get(k) || { zone_id: r.zone_id, division_id: r.division_id, shift: r.shift || '미지정', source: '사업부', dept_id: null, vendor_id: null, headcount: 0, entered_at: null };
+      c.headcount += 1; m.set(k, c);
+    }
+    return [...(rows || []).filter((x) => x.source !== '사업부'), ...m.values()];
+  };
   let SUPZ = new Set();   // '현장지원' 구역 id — 이 구역에 배치된 인원은 지원으로 집계
   function sumBy(rows, f) {
     const r = { biz: 0, sup: 0, coop: 0 };
@@ -323,6 +335,7 @@
           sb.from('team_shift').select('division_id,team,shift,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => []),
           sb.rpc('union_status', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null)]);
       // 같은 사람이 휴무계획 '행정' 팀 출근과 관리자 출근에 모두 잡히면 한 번만 집계 (행정 팀 쪽을 남김)
+      rows = viaCheck(rows, rosterRows, o.division);
       const admNames = new Set((rosterRows || []).filter((r) => /^행정/.test(String(r.team || '').trim()) && r.checked).map((r) => r.name));
       staffRows = (staffRows || []).filter((x) => !admNames.has(x.name));
       staffBucket = staffV && staffV.bucket === 'biz' ? 'biz' : 'sup';
@@ -699,13 +712,14 @@
       };
       const load = async () => {
         try {
-          const [zones, rows, quota, inc, un] = await Promise.all([
+          const [zones, rows0, quota, inc, un, ros] = await Promise.all([
             q(sb.from('zones').select('id,division_id,side,floor,area,team,label,task,required,active')),
             loadLatest(o.date, o.division === 'all' ? null : o.division), loadQuota(),
             sb.rpc('list_incidents', { p_limit: 300 }).then((r) => (r.error ? incRows : r.data || []), () => incRows),
-            sb.rpc('union_status', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => unionRows)]);
-          incRows = inc; unionRows = un;
-          render(zones, rows, quota);
+            sb.rpc('union_status', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => unionRows),
+            rosterPaged(o.date, true).then((r) => (r.length ? r : rosterRows), () => rosterRows)]);
+          incRows = inc; unionRows = un; rosterRows = ros;
+          render(zones, viaCheck(rows0, rosterRows, o.division), quota);
         } catch (e) { /* 다음 갱신 때 다시 시도 */ }
       };
       if (cache) render(cache.zones, cache.rows, cache.quota);
@@ -806,7 +820,7 @@
 
   window.APP.ops = { tnumO, today, addDays, hhmm, dateLabel, basisFor, zoneName, groupZones, sumBy, quotaSum, pct, tone, shiftList, ensureShifts, ctx, zoneSort };
 
-  register('input', '인력 입력', ['leader', 'admin', 'master'], inputView, '내 팀 인원을 구역별로 입력');
+  /* 인력 입력은 폐지: 구역별 투입은 출근 체크의 구역 배치로 집계 */
   register('place', '지원 배치', ['chief', 'admin', 'master'], placeView, '지원부서 인원을 구역에 배치');
   register('att', '출근 현황', ['leader', 'chief', 'admin', 'master'], attView, '출근·휴무·연차 등 인원 입력');
   register('status', '구역 현황', ['leader', 'chief', 'admin', 'master'], statusView, '구역별 인원과 상근 대비 % 확인');

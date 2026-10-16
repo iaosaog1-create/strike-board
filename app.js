@@ -243,7 +243,7 @@
   }
   /* 화면 등록: 각 기능 파일이 register() 로 자기 화면을 추가합니다 */
   const SCREENS = [];
-  const MENU_ORDER = ['home', 'check', 'input', 'place', 'att', 'incident', 'status', 'setup', 'coop', 'leave', 'report', 'approve'];
+  const MENU_ORDER = ['home', 'check', 'place', 'att', 'incident', 'status', 'setup', 'coop', 'leave', 'report', 'approve'];
   const ALL_ROLES = ['leader', 'chief', 'admin', 'master'];
   function register(key, label, roles, render, desc) { SCREENS.push({ key, label, roles, render, desc }); }
   const stopTimers = () => { (state.timers || []).forEach(clearInterval); state.timers = []; };
