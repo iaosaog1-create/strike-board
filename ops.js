@@ -276,12 +276,12 @@
     if (!o.basis || !o.basisSet) { o.basis = [...shiftList()]; o.basisSet = true; }
     if (!isMaster(me) && o.division === 'all') o.division = me.division_id;
     const redraw = () => statusView(body);
-    let cache = null; let fdiv = null; let teamRows = null; let attRows = []; let rosterRows = []; let ratioCfg = { mode: 'daily', custom: {} }; let staffRows = []; let staffBucket = 'sup';
+    let cache = null; let fdiv = null; let teamRows = null; let attRows = []; let rosterRows = []; let ratioCfg = { mode: 'daily', custom: {} }; let staffRows = []; let staffBucket = 'sup'; let incRows = [];
     const refresh = async () => {
       let zones, rows, quota;
       try {
         let ratioV = null; let staffV = null;
-        [zones, rows, quota, teamRows, attRows, rosterRows, ratioV, staffRows, staffV] = await Promise.all([
+        [zones, rows, quota, teamRows, attRows, rosterRows, ratioV, staffRows, staffV, incRows] = await Promise.all([
           q(sb.from('zones').select('id,division_id,side,floor,area,label,task,required,active')),
           loadLatest(o.date, o.division === 'all' ? null : o.division), loadQuota(),
           sb.rpc('leave_team', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null),
@@ -289,7 +289,8 @@
           sb.rpc('team_roster', { p_date: o.date, p_team: null }).then((r) => (r.error ? [] : r.data || []), () => []),
           sb.from('settings').select('key,value').eq('key', 'ratio_base').then((r) => (r.error || !r.data || !r.data[0] ? null : r.data[0].value), () => null),
           sb.rpc('staff_checkins', { p_date: o.date }).then((r) => (r.error ? [] : r.data || []), () => []),
-          sb.from('settings').select('key,value').eq('key', 'staff_bucket').then((r) => (r.error || !r.data || !r.data[0] ? null : r.data[0].value), () => null)]);
+          sb.from('settings').select('key,value').eq('key', 'staff_bucket').then((r) => (r.error || !r.data || !r.data[0] ? null : r.data[0].value), () => null),
+          sb.rpc('list_incidents', { p_limit: 30 }).then((r) => (r.error ? [] : r.data || []), () => [])]);
       staffBucket = staffV && staffV.bucket === 'biz' ? 'biz' : 'sup';
       if (ratioV && typeof ratioV === 'object') ratioCfg = { mode: ['daily', 'full', 'custom'].includes(ratioV.mode) ? ratioV.mode : 'daily', custom: ratioV.custom || {} };
       } catch (e) { return body.replaceChildren(pickers(o, redraw, { shiftPick: false, allDiv: true }), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); }
@@ -538,7 +539,18 @@
       const bar = pickers(o, redraw, { shiftPick: false, allDiv: true });
       bar.append(el('button', { type: 'button', class: 'btn ghost sm', onclick: refresh }, '새로고침'),
         el('button', { type: 'button', class: 'btn sm', onclick: openBoard }, '상황판 (큰 화면)'));
-      body.replaceChildren(bar, flip, head, tilesRow, flCard, lackCard, floorsCard, teamCard);
+      const incOpen = (incRows || []).filter((r) => r.status !== 'done');
+      const incBanner = incOpen.length ? (() => {
+        const K = (window.APP.incident || {}).KINDS || {}; const ST = (window.APP.incident || {}).STATUS || {};
+        return el('div', { class: 'card incbn' },
+          el('button', { type: 'button', class: 'incgo', onclick: () => { state.menu = 'incident'; window.APP.reload(); } },
+            el('b', {}, `⚠ 이벤트 신고 미조치 ${incOpen.length}건`), el('span', {}, '신고 목록 보기 ›')),
+          ...incOpen.slice(0, 3).map((r) => el('div', { class: 'incl ' + r.status },
+            el('span', { class: 'ik' }, (K[r.kind] || { label: '' }).label.slice(0, 2)), el('b', {}, (r.types || []).join(' · ')),
+            el('small', {}, `${shortDiv(divName(r.division_id))} · ${r.place || '장소 미기재'} · ${(window.APP.incident || { fmt: (x) => x }).fmt(r.occurred_at)}`),
+            el('em', {}, ST[r.status] || ''))));
+      })() : null;
+      body.replaceChildren(bar, incBanner, flip, head, tilesRow, flCard, lackCard, floorsCard, teamCard);
     };
     /* 상황판: 큰 글씨 전체화면, 30초마다 자동 갱신 */
     function openBoard() {

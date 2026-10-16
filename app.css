@@ -854,3 +854,21 @@ h2.divh.dv-t1,h2.divh.dv-t2,h2.divh.dv-bd{border-left-color:var(--teal)}
 .qrgrid.big.two .qr{width:100%;max-width:170px;height:auto}
 .poster .plab{display:inline-block;margin:0 auto 6mm;border-radius:999px;padding:3mm 12mm;font-size:34px;font-weight:800;color:#fff}
 .poster .plab.in{background:#2FA67C}.poster .plab.out{background:#222}
+
+/* 이벤트 신고 */
+.inc-who{font-size:19px;font-weight:700;padding:8px 2px}
+.inc-form textarea{width:100%;padding:10px 14px;border:2px solid var(--field-line);border-radius:14px;background:var(--field);font-size:18px;font-weight:600;font-family:inherit;resize:vertical}
+.inc-form select{margin-top:8px}
+.inc-item{border:1px solid var(--line);border-radius:14px;margin-top:8px;background:#fff;overflow:hidden}
+.inc-row{width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;text-align:left;border:0;background:transparent;padding:12px 14px;cursor:pointer}
+.inc-row b{font-size:18px}.inc-row small{grid-column:2;color:var(--sub);font-size:14px}.inc-row .badge{grid-row:1/3;grid-column:3}
+.ik{display:inline-block;min-width:44px;text-align:center;padding:3px 8px;border-radius:8px;background:#EDEFF2;font-size:13px;font-weight:800;color:#445}
+.inc-row.new .ik,.incl.new .ik{background:#FBE3E0;color:#B3261E}.inc-row.doing .ik,.incl.doing .ik{background:#FFF1D6;color:#8A5A00}
+.inc-body{padding:4px 14px 14px;border-top:1px solid var(--line)}
+.inc-d{margin-top:10px}.inc-d span{font-size:13px;font-weight:800;color:var(--sub)}.inc-d p{margin:2px 0 0;font-size:17px;white-space:pre-wrap;word-break:break-word}
+.incbn{border:2px solid #E0584D;background:#FFF6F5;padding:10px 12px}
+.incgo{width:100%;display:flex;justify-content:space-between;align-items:center;border:0;background:transparent;padding:4px 2px 8px;cursor:pointer;font-size:17px}
+.incgo b{color:#B3261E;font-size:19px}.incgo span{color:var(--sub);font-size:14px;font-weight:700}
+.incl{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;padding:8px 2px;border-top:1px solid #F1D5D1}
+.incl b{font-size:17px}.incl small{grid-column:2;color:var(--sub);font-size:13px}.incl em{grid-row:1/3;grid-column:3;font-style:normal;font-weight:800;font-size:13px;color:#B3261E}
+.inc-form input[type=datetime-local]{width:100%;min-height:56px;padding:10px 16px;border:2px solid var(--field-line);border-radius:14px;background:var(--field);font-size:19px;font-weight:600}

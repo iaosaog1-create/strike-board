@@ -243,7 +243,7 @@
   }
   /* 화면 등록: 각 기능 파일이 register() 로 자기 화면을 추가합니다 */
   const SCREENS = [];
-  const MENU_ORDER = ['home', 'check', 'input', 'place', 'att', 'status', 'setup', 'coop', 'leave', 'report', 'approve'];
+  const MENU_ORDER = ['home', 'check', 'input', 'place', 'att', 'incident', 'status', 'setup', 'coop', 'leave', 'report', 'approve'];
   const ALL_ROLES = ['leader', 'chief', 'admin', 'master'];
   function register(key, label, roles, render, desc) { SCREENS.push({ key, label, roles, render, desc }); }
   const stopTimers = () => { (state.timers || []).forEach(clearInterval); state.timers = []; };
@@ -253,7 +253,7 @@
     const me = state.me;
     const menus = SCREENS.filter((s) => s.roles.includes(me.role) && !(s.key === 'status' && s.roles.includes(me.role)))
       .sort((a, b) => MENU_ORDER.indexOf(a.key) - MENU_ORDER.indexOf(b.key));
-    if (me.role === 'leader') { menus.length = 0; menus.push(SCREENS.find((s) => s.key === 'check')); state.menu = 'check'; }   // 팀장은 내 팀 화면 하나만
+    if (me.role === 'leader') { menus.length = 0; menus.push(SCREENS.find((s) => s.key === 'check')); menus.push(SCREENS.find((s) => s.key === 'incident')); if (state.menu !== 'incident') state.menu = 'check'; }   // 팀장은 내 팀 화면 하나만
     if (!menus.some((s) => s.key === state.menu)) state.menu = 'home';
     if (state.menu === 'status') state.menu = 'home';
     const ICONS = {
@@ -266,6 +266,7 @@
       coop: '<circle cx="10" cy="8" r="3.2"/><path d="M4 20c0-3.6 2.7-6 6-6"/><path d="M14 17l2.5 2.5L21 14"/>',
       leave: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
       report: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 12h6M10 16h6"/>',
+      incident: '<path d="M12 3l10 18H2z"/><path d="M12 10v5"/><path d="M12 18v.5"/>',
       approve: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
     };
     const icon = (k) => { const sp = el('span', { class: 'ic', 'aria-hidden': 'true' }); sp.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICONS[k] || ICONS.home}</svg>`; return sp; };
