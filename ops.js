@@ -306,7 +306,11 @@
       const inB = (x) => basis.includes(x.shift);
       const allDay = basis.length >= shiftList().length;
       const tIn = (s) => basis.includes(s) || (s === '미지정' && allDay);
-      const availOf = (d) => (teamRows || []).filter((t) => t.division_id === d && tIn(t.shift)).reduce((n, t) => n + t.roster - t.absent, 0);
+      const isAdm = (t) => String(t || '').trim() === '행정';
+      // 행정 팀 출근 체크 인원 = 지원으로 집계
+      const admOf = (d) => (rosterRows || []).filter((r) => r.division_id === d && isAdm(r.team) && r.checked && tIn(r.shift)).length;
+      const sumD = (d, f) => { const r = sumBy(rows, f); const a = admOf(d); r.sup += a; r.total += a; r.adm = a; return r; };
+      const availOf = (d) => (teamRows || []).filter((t) => t.division_id === d && tIn(t.shift) && !isAdm(t.team)).reduce((n, t) => n + t.roster - t.absent, 0);
       const quotaSum = (qu, d, b) => {
         if (ratioCfg.mode === 'custom' && Number(ratioCfg.custom[d]) > 0) return Number(ratioCfg.custom[d]);
         if (ratioCfg.mode === 'full') { const f = qu.filter((x) => x.division_id === d && b.includes(x.shift)).reduce((t, x) => t + (x.full_quota || 0), 0); if (f > 0) return f; }
@@ -315,7 +319,7 @@
       // 사업부별 요약표
       let tot = { biz: 0, sup: 0, coop: 0, total: 0, q: 0 };
       const trs = divs.map((d) => {
-        const s = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis);
+        const s = sumD(d.id, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis);
         tot = { biz: tot.biz + s.biz, sup: tot.sup + s.sup, coop: tot.coop + s.coop, total: tot.total + s.total, q: tot.q + qq };
         const p = pct(s.total, qq);
         return el('tr', {}, el('th', { class: divTone(d.id) }, shortDiv(d.name)), el('td', {}, s.biz), el('td', {}, s.sup), el('td', {}, s.coop), el('td', { class: 'b' }, s.total), el('td', {}, qq || '-'), el('td', { class: 'pc ' + tone(p) }, p == null ? '-' : p + '%'));
@@ -334,7 +338,7 @@
       // 큰 숫자 카드: 사업부별 + 지원·협정
       const ICO = { ok: '✔', mid: '▲', low: '⚠', none: '' };
       const tiles = divs.map((d) => {
-        const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq); const t = tone(p);
+        const sm = sumD(d.id, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq); const t = tone(p);
         return el('div', { class: 'stile ' + divTone(d.id) },
           el('div', { class: 'tn' }, shortDiv(d.name)),
           ringNode(p, t),
@@ -346,8 +350,9 @@
       const inScope = (x) => inB(x) && (o.division === 'all' || x.division_id === o.division);
       tiles.push(el('div', { class: 'stile sup' }, el('div', { class: 'tn' }, '지원·협정'),
         ...supDepts.map((d) => el('div', { class: 'sl' }, el('span', {}, d.name), el('b', {}, `${rows.filter((x) => x.source === '지원' && x.dept_id === d.id && inScope(x)).reduce((t, x) => t + x.headcount, 0)}명`))),
+        el('div', { class: 'sl' }, el('span', {}, '행정'), el('b', {}, `${divs.reduce((t, d) => t + admOf(d.id), 0)}명`)),
         el('div', { class: 'sl' }, el('span', {}, '협정인력'), el('b', {}, `${rows.filter((x) => x.source === '협정' && inScope(x)).reduce((t, x) => t + x.headcount, 0)}명`))));
-      const gTot0 = divs.reduce((t, d) => t + sumBy(rows, (x) => x.division_id === d.id && inB(x)).total, 0);
+      const gTot0 = divs.reduce((t, d) => t + sumD(d.id, (x) => x.division_id === d.id && inB(x)).total, 0);
       const gQ0 = divs.reduce((t, d) => t + quotaSum(quota, d.id, basis), 0); const gP0 = pct(gTot0, gQ0); const gT0 = tone(gP0);
       const lack0 = Math.max(0, gQ0 - gTot0);
       const supCoop = rows.filter((x) => x.source === '협정' && inScope(x)).reduce((t, x) => t + x.headcount, 0);
@@ -361,7 +366,7 @@
           el('tbody', {}, trs))),
         el('div', { class: 'gsup' }, supCells.map(([n, v]) => el('div', {}, el('b', {}, `${v}명`), el('small', {}, n)))),
         null);
-      const gTot = divs.reduce((t, d) => t + sumBy(rows, (x) => x.division_id === d.id && inB(x)).total, 0);
+      const gTot = divs.reduce((t, d) => t + sumD(d.id, (x) => x.division_id === d.id && inB(x)).total, 0);
       const gQ = divs.reduce((t, d) => t + quotaSum(quota, d.id, basis), 0); const gP = pct(gTot, gQ);
       const digits = String(gTot).padStart(3, '0').split('');
       const shareBar = el('div', { class: 'share' }, divs.map((d) => { const n = sumBy(rows, (x) => x.division_id === d.id && inB(x)).total; return el('i', { class: divTone(d.id), style: `flex:${Math.max(n, 0.0001)}` }); }));
@@ -426,8 +431,8 @@
         for (const z of zs) { const k = `${z.side}\u0001${z.floor}`; if (!groups.has(k)) groups.set(k, { side: z.side, floor: z.floor, ids: new Set(), req: 0 }); const g = groups.get(k); g.ids.add(z.id); g.req += z.required || 0; }
         const list = [...groups.values()].sort((x, y) => (SIDE_ORD[x.side] ?? 9) - (SIDE_ORD[y.side] ?? 9) || x.floor.localeCompare(y.floor, 'ko', { numeric: true }));
         const frs = list.map((g) => { const sm = sumBy(rows, (x) => g.ids.has(x.zone_id) && inB(x)); return { name: `${g.side} ${g.floor}`, req: g.req, biz: sm.biz, sup: sm.sup, coop: sm.coop, total: sm.total }; });
-        const dsm = sumBy(rows, (x) => x.division_id === d.id && inB(x));
-        const tt = (teamRows || []).filter((t) => t.division_id === d.id && tIn(t.shift));
+        const dsm = sumD(d.id, (x) => x.division_id === d.id && inB(x));
+        const tt = (teamRows || []).filter((t) => t.division_id === d.id && tIn(t.shift) && !isAdm(t.team));
         const leaveN = tt.reduce((n, t) => n + t.absent, 0);
         let ab = 0; let abAny = false;
         for (const t of tt) { const rs = (rosterRows || []).filter((r) => r.division_id === d.id && tnum2(r.team) === tnum2(t.team)); if (rs.length && rs[0].closed) { abAny = true; ab += rs.filter((r) => !r.checked && !['off', 'hold', 'annual', 'health', 'sick', 'other'].includes(r.leave_kind)).length; } }
@@ -435,6 +440,7 @@
         const td = (v, cls) => el('td', cls ? { class: cls } : {}, v === null || v === undefined || v === 0 ? (v === 0 ? '0' : '-') : String(v));
         dsum.push({ d, dq, biz: dsm.biz, sup: dsm.sup, coop: dsm.coop, leave: tt.length ? leaveN : null, ab: abAny ? ab : null, total: dsm.total });
         const rowsEl = frs.map((f) => el('tr', {}, el('th', {}, f.name), td(f.req || null), td(f.biz), td(f.sup), td(f.coop), el('td', { class: 'dim' }, '-'), el('td', { class: 'dim' }, '-'), td(f.total, 'b')));
+        if (dsm.adm) rowsEl.push(el('tr', { class: 'admrow' }, el('th', {}, '행정(지원)'), td(null), td(0), td(dsm.adm), td(0), el('td', { class: 'dim' }, '-'), el('td', { class: 'dim' }, '-'), td(dsm.adm, 'b')));
         rowsEl.push(el('tr', { class: 'sum' }, el('th', {}, '합계'), td(dq || null), td(dsm.biz), td(dsm.sup), td(dsm.coop), td(tt.length ? leaveN : null), el('td', { class: abAny && ab ? 'pc low' : '' }, abAny ? String(ab) : '-'), td(dsm.total, 'b')));
         flCard.append(el('h3', { class: 'divh2 ' + divTone(d.id) }, d.name),
           el('div', { class: 'tblwrap' }, el('table', { class: 'tbl fltbl' },
@@ -533,7 +539,7 @@
         const basis = o.basis; const inB = (x) => basis.includes(x.shift);
         const lacks = shortages(divs, zones, rows, basis);
         const cards = divs.map((d) => {
-          const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq);
+          const sm = sumBy(rows, (x) => x.division_id === d.id && inB(x)); const admN = (rosterRows || []).filter((r) => r.division_id === d.id && String(r.team || '').trim() === '행정' && r.checked && basis.includes(r.shift)).length; sm.sup += admN; sm.total += admN; const qq = quotaSum(quota, d.id, basis); const p = pct(sm.total, qq);
           return el('div', { class: 'bcard ' + divTone(d.id) },
             el('div', { class: 'bname' }, shortDiv(d.name)),
             el('div', { class: 'bbig' }, String(sm.total), el('small', {}, `/ ${qq || '-'}명`)),

@@ -7,7 +7,7 @@
   });
 
   const TEAMS = ['오전', '오후', '야간', '일근', '운영'];
-  const PLAN_TEAMS = Array.from({ length: 10 }, (_, i) => `${i + 1}팀`);   // 휴무계획의 팀
+  const PLAN_TEAMS = [...Array.from({ length: 10 }, (_, i) => `${i + 1}팀`), '행정'];   // 휴무계획의 팀
   const ROLE_LABEL = { master: '최고관리자', admin: '관리자', chief: '총괄팀장', leader: '팀장' };
   const TITLE_TO_ROLE = { '관리': 'admin', '팀장': 'leader', '총괄팀장': 'chief' };
   const ROLE_OPTIONS = [['leader', '팀장'], ['chief', '총괄팀장'], ['admin', '관리자']];
@@ -333,23 +333,39 @@
     const m = state.selected;
     const wrap = el('div', { class: 'detail-wrap' + (m ? ' open' : '') });
     if (!m) { wrap.append(el('div', { class: 'card empty' }, '왼쪽에서 가입자를 선택하세요')); return wrap; }
-    const inBiz = (state.divisions.find((d) => d.id === m.division_id) || {}).kind === '사업부';
-    const roleOpts = inBiz ? ROLE_OPTIONS : ROLE_OPTIONS.filter(([k]) => k === 'admin');
-    const pick = { role: inBiz ? (m.status === 'approved' ? m.role : (TITLE_TO_ROLE[m.req_title] || 'leader')) : 'admin', team: m.plan_team || '' };
-    const desc = el('div', { class: 'info' });
-    const drawDesc = () => desc.replaceChildren(el('b', {}, ROLE_LABEL[pick.role] + ' 권한'), ROLE_DESC[pick.role]);
-    drawDesc();
-    const teamBox = el('div', { class: 'f' });
-    const drawTeam = () => teamBox.replaceChildren(
-      el('span', { class: 'hint' }, pick.role === 'leader' ? '소속 팀 (필수)' : '소속 팀 (선택)'),
-      seg([...(pick.role === 'leader' ? [] : [['', '없음']]), ...PLAN_TEAMS.map((t) => [t, t])], pick.team, (v) => { pick.team = v; }));
-    drawTeam();
-    const roleSeg = seg(roleOpts, pick.role, (v) => { pick.role = v; drawDesc(); drawTeam(); });
+    const TITLES = [['관리', '관리'], ['팀장', '팀장'], ['총괄팀장', '총괄팀장']];
+    const pick = { div: m.division_id, title: ['관리', '팀장', '총괄팀장'].includes(m.req_title) ? m.req_title : '팀장', role: null, team: m.plan_team || '' };
+    const isBiz = () => (state.divisions.find((d) => d.id === pick.div) || {}).kind === '사업부';
+    pick.role = isBiz() ? (m.status === 'approved' ? m.role : (TITLE_TO_ROLE[m.req_title] || 'leader')) : 'admin';
+    const card = el('div', { class: 'card' });
     const ok = el('button', { class: 'btn', type: 'button' }, m.status === 'approved' ? '변경 저장' : '승인');
     const no = el('button', { class: 'btn danger', type: 'button' }, '반려');
+    const draw = () => {
+      const inBiz = isBiz();
+      if (!inBiz) pick.role = 'admin';
+      const roleOpts = inBiz ? ROLE_OPTIONS : ROLE_OPTIONS.filter(([k]) => k === 'admin');
+      const desc = el('div', { class: 'info' }, el('b', {}, ROLE_LABEL[pick.role] + ' 권한'), ROLE_DESC[pick.role]);
+      const divSel = el('select', { 'aria-label': '소속' }, ...state.divisions.map((d) => el('option', { value: d.id }, d.name)), el('option', { value: '' }, '소속 없음'));
+      divSel.value = pick.div == null ? '' : String(pick.div);
+      divSel.addEventListener('change', () => { pick.div = divSel.value === '' ? null : Number(divSel.value); draw(); });
+      card.replaceChildren(
+        el('div', { class: 'rows' }, row('이름', `${m.name} (${m.emp_no})`),
+          row('신청 소속', divName(m.division_id) || '소속 없음'), row('신청 직책', m.req_title), row('신청 팀', m.plan_team || (m.team ? m.team + '팀' : '-')),
+          row('현재 상태', STATUS_LABEL[m.status] + (m.status === 'approved' ? ' · ' + ROLE_LABEL[m.role] : ''))),
+        el('div', { class: 'f' }, el('p', { class: 'hint' }, '소속 (master 수정)'), divSel),
+        el('div', { class: 'f' }, el('p', { class: 'hint' }, '직책 (master 수정)'),
+          seg(TITLES, pick.title, (v) => { pick.title = v; pick.role = isBiz() ? (TITLE_TO_ROLE[v] || 'leader') : 'admin'; draw(); })),
+        el('div', { class: 'f' }, el('p', { class: 'hint' }, '최종 권한'), seg(roleOpts, pick.role, (v) => { pick.role = v; draw(); })),
+        inBiz ? null : el('p', { class: 'hint' }, '사업부 소속이 아니어서 관리자 권한만 줄 수 있습니다'),
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, pick.role === 'leader' ? '소속 팀 (필수 · 행정 포함)' : '소속 팀 (선택 · 행정 포함)'),
+          seg([...(pick.role === 'leader' ? [] : [['', '없음']]), ...PLAN_TEAMS.map((t) => [t, t])], pick.team, (v) => { pick.team = v; draw(); })),
+        pick.team === '행정' ? el('p', { class: 'hint' }, '행정 팀 출근 인원은 현황 총계에서 "지원"으로 집계됩니다') : null,
+        desc, el('div', { class: 'actions' }, ok, no));
+    };
+    draw();
     const run = (approve) => async () => {
       if (approve && pick.role === 'leader' && !pick.team) return toast('팀장은 소속 팀을 선택하세요', 'err');
-      const { error } = await sb.rpc('review_member', { p_user: m.id, p_approve: approve, p_role: pick.role, p_team: null, p_plan_team: pick.role === 'leader' ? pick.team || null : null });
+      const { error } = await sb.rpc('review_member', { p_user: m.id, p_approve: approve, p_role: pick.role, p_team: null, p_plan_team: pick.role === 'leader' ? pick.team || null : (pick.team || null), p_division: pick.div, p_title: pick.title });
       if (error) return toast('처리하지 못했습니다. 권한을 확인하세요', 'err');
       toast(approve ? `${m.name}님을 ${ROLE_LABEL[pick.role]}(으)로 승인했습니다` : `${m.name}님을 반려했습니다`);
       state.selected = null;
@@ -357,15 +373,7 @@
     };
     ok.addEventListener('click', busy(ok, run(true)));
     no.addEventListener('click', busy(no, run(false)));
-    wrap.append(
-      el('button', { class: 'back', type: 'button', onclick: () => { state.selected = null; drawApprove(body); } }, '← 목록으로'),
-      el('div', { class: 'card' },
-        el('div', { class: 'rows' }, row('이름', `${m.name} (${m.emp_no})`), row('소속', divName(m.division_id) || '소속 없음'),
-          row('신청 직책', m.req_title), row('신청 팀', m.plan_team || (m.team ? m.team + '팀' : '-')),
-          row('현재 상태', STATUS_LABEL[m.status] + (m.status === 'approved' ? ' · ' + ROLE_LABEL[m.role] : ''))),
-        el('div', { class: 'f', style: null }, el('p', { class: 'hint' }, '최종 권한'), roleSeg),
-        inBiz ? null : el('p', { class: 'hint' }, '사업부 소속이 아니어서 관리자 권한만 줄 수 있습니다'), teamBox, desc,
-        el('div', { class: 'actions' }, ok, no)));
+    wrap.append(el('button', { class: 'back', type: 'button', onclick: () => { state.selected = null; drawApprove(body); } }, '← 목록으로'), card);
     return wrap;
   }
 
