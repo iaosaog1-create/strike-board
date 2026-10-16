@@ -303,6 +303,9 @@
           sb.rpc('list_incidents', { p_limit: 300 }).then((r) => (r.error ? [] : r.data || []), () => []),
           sb.from('team_shift').select('division_id,team,shift,start_time,end_time,duty').then((r) => (r.error ? [] : r.data || []), () => []),
           sb.rpc('union_status', { p_date: o.date }).then((r) => (r.error ? null : r.data || []), () => null)]);
+      // 같은 사람이 휴무계획 '행정' 팀 출근과 관리자 출근에 모두 잡히면 한 번만 집계 (행정 팀 쪽을 남김)
+      const admNames = new Set((rosterRows || []).filter((r) => String(r.team || '').trim() === '행정' && r.checked).map((r) => r.name));
+      staffRows = (staffRows || []).filter((x) => !admNames.has(x.name));
       staffBucket = staffV && staffV.bucket === 'biz' ? 'biz' : 'sup';
       if (ratioV && typeof ratioV === 'object') ratioCfg = { mode: ['roster', 'daily', 'full', 'custom'].includes(ratioV.mode) ? ratioV.mode : 'roster', custom: ratioV.custom || {} };
       } catch (e) { return body.replaceChildren(pickers(o, redraw, { shiftPick: false, allDiv: true }), el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요')); }
