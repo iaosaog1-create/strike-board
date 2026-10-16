@@ -392,7 +392,7 @@
         draw();
       };
       const cards = rows.map((r) => el('button', { type: 'button', class: 'pp gx' + (r.checked ? ' on' : '') + (r.user_id === me.id ? ' me' : ''), disabled: !(canEdit || r.user_id === me.id), 'aria-pressed': String(!!r.checked), onclick: () => mark(r) },
-        el('b', {}, r.name), el('small', {}, r.checked ? `✔ ${shortDiv(divName(r.division_id))} ${r.shift}` : (r.user_id === me.id ? '내 출근 ▶' : ROLE_NAME[r.role] || ''))));
+        el('b', {}, r.name), el('small', {}, r.checked ? `✔ ${shortDiv(divName(r.division_id))} ${r.shift}${r.auto ? ' · 자동' : ''}` : (r.user_id === me.id ? '내 출근 ▶' : ROLE_NAME[r.role] || ''))));
       const on = rows.filter((r) => r.checked);
       const byDiv = bizDivs().map((d) => [d, on.filter((r) => r.division_id === d.id)]).filter(([, l]) => l.length);
       const top = el('div', { class: 'card' },

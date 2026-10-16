@@ -401,7 +401,7 @@
   /* ---------- 구역·정원 설정 (최고관리자·관리자) ---------- */
   const SIDES = [['L/S', 'L/S'], ['A/S', 'A/S'], ['기타', '기타']];
   const AREAS = [['전체', '전체'], ['동편', '동편'], ['서편', '서편']];
-  const SET_TABS = [['quota', '정원'], ['zones', '구역'], ['tasks', '업무 종류']];
+  const SET_TABS = [['quota', '정원'], ['zones', '구역'], ['tasks', '업무 종류'], ['auto', '자동 출근']];
   const numIn = (v, label) => el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', 'aria-label': label, value: v == null ? '' : String(v) });
   const toInt = (t) => { const x = String(t).trim(); if (x === '') return null; return /^\d{1,5}$/.test(x) ? Number(x) : NaN; };
   const bizDivs = () => state.divisions.filter((d) => d.kind === '사업부');
@@ -431,8 +431,10 @@
   }
   function drawSetup(body) {
     const S = state.setup;
-    const tabs = seg(SET_TABS, S.tab, (v) => { S.tab = v; drawSetup(body); });
-    const pane = S.tab === 'quota' ? quotaPane(body) : S.tab === 'zones' ? zonesPane(body) : tasksPane(body);
+    const tabList = SET_TABS.filter((t) => t[0] !== 'auto' || (state.me && state.me.role === 'master'));
+    if (!tabList.some((t) => t[0] === S.tab)) S.tab = 'quota';
+    const tabs = seg(tabList, S.tab, (v) => { S.tab = v; drawSetup(body); });
+    const pane = S.tab === 'quota' ? quotaPane(body) : S.tab === 'zones' ? zonesPane(body) : S.tab === 'auto' ? autoPane(body) : tasksPane(body);
     body.replaceChildren(tabs, pane);
   }
 
@@ -600,6 +602,87 @@
         el('p', { class: 'hint' }, '이미 구역에 쓰인 업무는 삭제하지 않고 "사용 중지"로 숨깁니다.')));
   }
 
+  /* ---------- 자동 출근 설정 (master) ---------- */
+  const numF = (v) => { const x = Number(String(v).trim()); return Number.isFinite(x) ? x : NaN; };
+  function autoPane(body) {
+    const box = el('div', {}, el('p', { class: 'empty' }, '불러오는 중…'));
+    (async () => {
+      const [cf, ls] = await Promise.all([
+        sb.from('settings').select('key,value').eq('key', 'auto_checkin').then((r) => (r.error ? { data: [] } : r), () => ({ data: [] })),
+        sb.rpc('list_staff_work_time').then((r) => r, () => ({ error: true }))]);
+      if (ls.error) { box.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 28_auto_checkin.sql 실행 여부를 확인하세요')); return; }
+      const cfg = (cf.data && cf.data[0] && cf.data[0].value) || {};
+      const mk = (p) => ({ lat: numIn(p && p.lat != null ? p.lat : '', '위도'), lng: numIn(p && p.lng != null ? p.lng : '', '경도') });
+      const t1 = mk(cfg.t1), t2 = mk(cfg.t2);
+      const rad = numIn(cfg.radius_km != null ? cfg.radius_km : 2, '반경(km)');
+      const win = numIn(cfg.window_min != null ? Math.round(cfg.window_min / 60 * 10) / 10 : 2, '출근시간 전후(시간)');
+      const here = (t) => el('button', { class: 'btn ghost sm', type: 'button', onclick: () => {
+        if (!navigator.geolocation) return toast('이 기기에서는 위치를 읽을 수 없습니다', 'err');
+        navigator.geolocation.getCurrentPosition((pos) => { t.lat.value = pos.coords.latitude.toFixed(6); t.lng.value = pos.coords.longitude.toFixed(6); toast('현재 위치를 채웠습니다. 저장해야 반영됩니다'); },
+          () => toast('위치를 읽지 못했습니다. 위치 허용을 확인하세요', 'err'), { enableHighAccuracy: true, timeout: 10000 });
+      } }, '현재 위치로 채우기');
+      const pt = (title, t) => el('div', { class: 'card' }, el('h2', {}, title),
+        el('div', { class: 'agrid' }, el('label', { class: 'f' }, el('span', {}, '위도'), t.lat), el('label', { class: 'f' }, el('span', {}, '경도'), t.lng)), here(t));
+      const times = (ls.data || []).map((u) => { const i = el('input', { type: 'time', value: u.work_time ? String(u.work_time).slice(0, 5) : '', 'aria-label': `${u.name} 출근시간` }); return { u, i }; });
+      const save = el('button', { class: 'btn', type: 'button' }, '자동 출근 설정 저장');
+      save.addEventListener('click', busy(save, async () => {
+        const rd = numF(rad.value), wn = numF(win.value);
+        if (!(rd > 0 && rd <= 20)) return toast('반경은 0보다 크고 20km 이하로 입력하세요', 'err');
+        if (!(wn > 0 && wn <= 12)) return toast('출근시간 전후는 0보다 크고 12시간 이하로 입력하세요', 'err');
+        const one = (t, label) => {
+          if (t.lat.value.trim() === '' && t.lng.value.trim() === '') return null;
+          const la = numF(t.lat.value), ln = numF(t.lng.value);
+          if (!(la >= 30 && la <= 45 && ln >= 120 && ln <= 135)) { toast(`${label} 위도·경도를 확인하세요`, 'err'); return false; }
+          return { lat: la, lng: ln };
+        };
+        const p1 = one(t1, '제1여객터미널'); if (p1 === false) return;
+        const p2 = one(t2, '제2여객터미널'); if (p2 === false) return;
+        const val = { radius_km: rd, window_min: Math.round(wn * 60) };
+        if (p1) val.t1 = p1; if (p2) val.t2 = p2;
+        const { error } = await sb.from('settings').upsert({ key: 'auto_checkin', value: val, note: '관리자 자동 출근 설정' }, { onConflict: 'key' });
+        if (error) return toast('저장하지 못했습니다. master 권한을 확인하세요', 'err');
+        for (const { u, i } of times) {
+          const nv = i.value || null; const ov = u.work_time ? String(u.work_time).slice(0, 5) : null;
+          if (nv === ov) continue;
+          const r = await sb.rpc('set_staff_work_time', { p_user: u.user_id, p_time: nv });
+          if (r.error) return toast(`${u.name} 출근시간을 저장하지 못했습니다`, 'err');
+        }
+        toast('자동 출근 설정을 저장했습니다');
+        await setupView(body);
+      }));
+      box.replaceChildren(
+        el('p', { class: 'hint pad' }, '관리자가 앱을 열었을 때, 소속 터미널 반경 안이고 본인 출근시간 전후 안이면 그날 관리자 출근으로 자동 기록합니다. 위치(좌표)는 저장하지 않고 결과만 기록합니다. 출근시간을 지정하지 않은 계정은 자동 출근이 되지 않습니다.'),
+        pt('제1여객터미널 기준 위치 (T1·부대 사업부)', t1), pt('제2여객터미널 기준 위치 (T2 사업부)', t2),
+        el('div', { class: 'card' }, el('h2', {}, '범위'),
+          el('div', { class: 'agrid' }, el('label', { class: 'f' }, el('span', {}, '반경 (km)'), rad), el('label', { class: 'f' }, el('span', {}, '출근시간 전후 (시간)'), win)),
+          el('p', { class: 'hint' }, '환경미화운영그룹 소속은 제1·제2여객터미널 중 한 곳이라도 반경 안이면 가까운 터미널의 사업부(T1 또는 T2)로 기록합니다.')),
+        el('div', { class: 'card' }, el('h2', {}, '관리자별 출근시간'),
+          ...times.map(({ u, i }) => el('div', { class: 'qrow' }, el('b', {}, u.name, el('small', { class: 'qros' }, ` ${u.division || ''}`)), i, el('span', {}))),
+          times.length ? null : el('p', { class: 'empty' }, '관리자 계정이 없습니다')),
+        save);
+    })();
+    return box;
+  }
+
+  /* ---------- 관리자 자동 출근 (앱을 열 때 현재 위치 확인) ---------- */
+  const AUTO = { at: 0, done: '' };
+  function autoCheckin() {
+    const me = state.me;
+    if (!me || !['admin', 'chief', 'master'].includes(me.role) || !navigator.geolocation) return;
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+    if (AUTO.done === today || Date.now() - AUTO.at < 600000) return;
+    AUTO.at = Date.now();
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const { data, error } = await sb.rpc('auto_staff_checkin', { p_lat: pos.coords.latitude, p_lng: pos.coords.longitude });
+        if (error || !data) return;
+        if (data.status === 'done') { AUTO.done = today; toast(`자동 출근 완료 (${data.place} 반경)`); if (state.menu === 'check' || state.menu === 'home') mainView(); }
+        else if (data.status === 'already' || data.status === 'notime' || data.status === 'noconfig' || data.status === 'na') AUTO.done = today;
+      } catch (e) { /* 다음에 다시 시도 */ }
+    }, () => { /* 위치 허용 안 함: 직접 체크 */ }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') autoCheckin(); });
+
   /* ---------- 진입 / 로그아웃 ---------- */
   async function loadMe() {
     const { data: u } = await sb.auth.getUser();
@@ -623,6 +706,7 @@
     if (me.role === 'master') { state.tab = 'pending'; refreshApprovals().then(() => { if (state.me && state.menu !== 'approve') mainView(); }); }
     state.menu = 'home';
     mainView();
+    autoCheckin();
   }
   async function logoutThenLogin() {
     await sb.auth.signOut().catch(() => {});
