@@ -355,7 +355,7 @@
       const all = uAgg(divs.map((d) => d.id)); const us = uSum(all);
       const tbl = el('table', { class: 'untbl' }, el('thead', {}, el('tr', {}, ...['구분', '민노', '한마음', '비노조', '파업 참여', '참여율'].map((h) => el('th', { scope: 'col' }, h)))),
         el('tbody', {}, ...divs.map((d) => line(shortDiv(d.name), [d.id])), divs.length > 1 ? line('전체', divs.map((d) => d.id), 'tot') : null));
-      return el('div', { class: 'card unc' }, el('div', { class: 'evh' }, el('h2', {}, '노조현황'), el('small', { class: 'hint' }, '출근 인원 / 조합원 · 비노조는 명단 외 인원')),
+      return el('div', { class: 'card unc' }, el('div', { class: 'evh' }, el('h2', {}, '비정상상황 인력 구분'), el('small', { class: 'hint' }, '출근 인원 / 조합원 · 비노조는 명단 외 인원')),
         el('div', { class: 'tblwrap' }, tbl),
         el('p', { class: 'hint' }, `파업 참여 = 근무 예정 조합원 중 미출근(팀 출근 체크 마감 기준) · 민노 ${all['민노'].absent}명 · 한마음 ${all['한마음'].absent}명 · 참여율은 근무 예정 조합원 ${us.working}명 대비`));
     };
