@@ -339,7 +339,7 @@
     const isBiz = () => (state.divisions.find((d) => d.id === pick.div) || {}).kind === '사업부';
     pick.role = isBiz() ? (m.status === 'approved' ? m.role : (TITLE_TO_ROLE[m.req_title] || 'leader')) : 'admin';
     const card = el('div', { class: 'card' });
-    let delBtn = null;
+    let delBtn = null; let uv = null;   // uv: 노조현황 열람 허용자 id 목록 (20 SQL 실행 전에는 null)
     const ok = el('button', { class: 'btn', type: 'button' }, m.status === 'approved' ? '변경 저장' : '승인');
     const no = el('button', { class: 'btn danger', type: 'button' }, '반려');
     const draw = () => {
@@ -362,9 +362,17 @@
         el('div', { class: 'f' }, el('span', { class: 'hint' }, pick.role === 'leader' ? '소속 팀 (필수 · 행정 포함)' : '소속 팀 (선택 · 행정 포함)'),
           seg([...(pick.role === 'leader' ? [] : [['', '없음']]), ...PLAN_TEAMS.map((t) => [t, t])], pick.team, (v) => { pick.team = v; draw(); })),
         pick.team === '행정' ? el('p', { class: 'hint' }, '행정 팀 출근 인원은 현황 총계에서 "지원"으로 집계됩니다') : null,
+        (uv && m.status === 'approved' && m.role !== 'master') ? el('div', { class: 'f' }, el('p', { class: 'hint' }, '노조현황 열람 (즉시 적용)'),
+          seg([['0', '차단'], ['1', '허용']], uv.has(m.id) ? '1' : '0', async (v) => {
+            const { error } = await sb.rpc('set_union_viewer', { p_user: m.id, p_on: v === '1' });
+            if (error) return toast('변경하지 못했습니다: ' + (error.message || ''), 'err');
+            if (v === '1') uv.add(m.id); else uv.delete(m.id);
+            toast(v === '1' ? `${m.name}님의 노조현황 열람을 허용했습니다` : `${m.name}님의 노조현황 열람을 차단했습니다`); draw();
+          })) : null,
         desc, el('div', { class: 'actions' }, ok, no), delBtn ? el('div', { class: 'actions' }, delBtn) : null);
     };
     draw();
+    sb.rpc('union_viewer_ids').then((r) => { if (!r.error && Array.isArray(r.data)) { uv = new Set(r.data); draw(); } }, () => {});
     const run = (approve) => async () => {
       if (approve && pick.role === 'leader' && !pick.team) return toast('팀장은 소속 팀을 선택하세요', 'err');
       const { error } = await sb.rpc('review_member', { p_user: m.id, p_approve: approve, p_role: pick.role, p_team: null, p_plan_team: pick.role === 'leader' ? pick.team || null : (pick.team || null), p_division: pick.div, p_title: pick.title });

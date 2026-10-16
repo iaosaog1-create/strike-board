@@ -5,8 +5,8 @@
   const { today, hhmm, shiftList, ensureShifts } = window.APP.ops;
   const X = window.XLSX_LITE;
   const MASTERS = ['admin', 'master'];
-  const TABS = [['plan', '휴무계획'], ['erp', 'ERP 근태'], ['team', '팀 구성'], ['quarter', '분기 적용일'], ['log', '업로드 기록']];
-  const S = { tab: 'plan', div: null, year: null, plan: null, erp: null, teams: [], found: [] };
+  const TABS = [['plan', '휴무계획'], ['erp', 'ERP 근태'], ['team', '팀 구성'], ['union', '노조현황'], ['quarter', '분기 적용일'], ['log', '업로드 기록']];
+  const S = { tab: 'plan', div: null, year: null, plan: null, erp: null, teams: [], found: [], union: null };
   const MAX_BYTES = 6 * 1024 * 1024;
   const q = async (p) => { const r = await p; if (r.error) throw r.error; return r.data || []; };
 
@@ -112,10 +112,12 @@
     const redraw = () => leaveView(body);
     const divSeg = master ? el('div', { class: 'f top0' }, el('span', { class: 'hint' }, '사업부'),
       seg(bizDivs().map((d) => [String(d.id), shortDiv(d.name)]), String(S.div), (v) => { S.div = Number(v); S.plan = S.erp = null; redraw(); }, (v) => divTone(v))) : null;
-    const tabs = seg(TABS, S.tab, (v) => { S.tab = v; redraw(); });
+    const isOwner = me.role === 'master';
+    if (S.tab === 'union' && !isOwner) S.tab = 'plan';
+    const tabs = seg(TABS.filter((t) => t[0] !== 'union' || isOwner), S.tab, (v) => { S.tab = v; redraw(); });
     body.replaceChildren(tabs, el('div', { class: 'card pick' }, divSeg || el('p', { class: 'hint top0' }, `${divName(S.div)} 업로드`)), el('p', { class: 'empty' }, '불러오는 중…'));
     let pane;
-    try { pane = await { plan: planPane, erp: erpPane, team: teamPane, quarter: quarterPane, log: logPane }[S.tab](redraw); }
+    try { pane = await { plan: planPane, erp: erpPane, team: teamPane, union: unionPane, quarter: quarterPane, log: logPane }[S.tab](redraw); }
     catch (e) { pane = el('p', { class: 'empty' }, '불러오지 못했습니다. 새로고침 해 주세요'); }
     body.replaceChildren(tabs, el('div', { class: 'card pick' }, divSeg || el('p', { class: 'hint top0' }, `${divName(S.div)} 업로드`)), pane);
   }
@@ -135,6 +137,66 @@
       try { await onFile(inp.files[0]); } catch (e) { box.textContent = e.message || '파일을 읽지 못했습니다'; box.hidden = false; }
     });
     return el('div', { class: 'f' }, el('label', { class: 'filebtn' }, label, inp), note ? el('p', { class: 'hint' }, note) : null, box);
+  }
+
+
+  /* ---- 노조현황 (master 전용): 사번 + 소속 노조(민노/한마음) 엑셀 → 조합원 명단 ---- */
+  function parseUnion(rows) {
+    const h = findHeader(rows, ['사번']) || findHeader(rows, ['사원번호']);
+    if (!h) throw new Error('노조현황 양식이 아닙니다. "사번"과 "노조" 열이 필요합니다');
+    const { hs } = h;
+    const ce = colOf(hs, ['사번', '사원번호']);
+    let ck = hs.findIndex((x) => /노조|조합/.test(x));
+    if (ck < 0) ck = colOf(hs, ['소속', '구분']);
+    if (ce < 0 || ck < 0) throw new Error('"사번"과 "노조"(소속 노조) 열을 찾지 못했습니다');
+    const out = { rows: [], kinds: { '민노': 0, '한마음': 0 }, skipped: 0, unknown: {}, dup: 0 };
+    const seen = new Set();
+    for (const r of rows.slice(h.i + 1)) {
+      const emp = cell(r[ce]); if (!emp) continue;
+      const v = cell(r[ck]).replace(/\s+/g, '');
+      let kind = null;
+      if (/민노|민주노총|민주/.test(v)) kind = '민노'; else if (/한마음/.test(v)) kind = '한마음';
+      else if (!v || /비노조|없음|무|미가입|해당없음|^-$/.test(v)) { out.skipped++; continue; }
+      else { out.unknown[v] = (out.unknown[v] || 0) + 1; continue; }
+      if (seen.has(emp)) { out.dup++; continue; }
+      seen.add(emp); out.rows.push({ emp_no: emp, kind }); out.kinds[kind]++;
+    }
+    if (!out.rows.length) throw new Error('민노 또는 한마음으로 읽힌 사람이 없습니다. 노조 열의 값을 확인하세요');
+    return out;
+  }
+
+  async function unionPane(redraw) {
+    const { data: sum, error } = await sb.rpc('union_roster_summary');
+    if (error) return el('div', { class: 'card' }, el('h2', {}, '노조현황 업로드'), el('p', { class: 'hint' }, '불러오지 못했습니다. 20_union.sql 실행 여부를 확인하세요'));
+    const prev = el('div', {});
+    const drawPrev = () => {
+      const p = S.union;
+      if (!p) return prev.replaceChildren();
+      const go = el('button', { class: 'btn', type: 'button' }, '조합원 명단 저장 (기존 명단 교체)');
+      go.addEventListener('click', busy(go, async () => {
+        const { data, error: er } = await sb.rpc('set_union_roster', { p_rows: p.rows, p_replace: true });
+        if (er) return toast('저장하지 못했습니다: ' + (er.message || '권한과 파일 내용을 확인하세요'), 'err');
+        toast(`조합원 ${data}명을 저장했습니다`); S.union = null; redraw();
+      }));
+      const unk = Object.entries(p.unknown);
+      prev.replaceChildren(el('div', { class: 'info' }, el('b', {}, p.fileName), `민노 ${p.kinds['민노']}명 · 한마음 ${p.kinds['한마음']}명 · 비노조(제외) ${p.skipped}명`),
+        unk.length ? el('p', { class: 'hint warn' }, `읽지 못한 노조 값: ${unk.map(([k, n]) => `${k} ${n}명`).join(', ')} (제외됨)`) : null,
+        p.dup ? el('p', { class: 'hint warn' }, `중복 사번 ${p.dup}줄은 첫 줄만 반영합니다`) : null,
+        go);
+    };
+    drawPrev();
+    const k = sum.kinds || {};
+    return el('div', {}, el('div', { class: 'card' }, el('h2', {}, '노조현황 업로드'),
+      el('p', { class: 'hint' }, '"사번"과 "노조"(소속 노조) 열이 있는 엑셀입니다. 노조 칸에는 민노 또는 한마음을 적고, 비노조는 비우거나 "비노조"로 적습니다. 명단에 없는 사람은 모두 비노조로 집계됩니다.'),
+      sum.total
+        ? el('div', { class: 'info' }, el('b', {}, `현재 조합원 ${sum.total}명`), `민노 ${k['민노'] || 0} · 한마음 ${k['한마음'] || 0} · 휴무계획과 맞은 인원 ${sum.matched}명` + (sum.updated_at ? ` · ${new Date(sum.updated_at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}` : ''))
+        : el('p', { class: 'hint' }, '아직 업로드한 노조현황이 없습니다'),
+      sum.unmatched && sum.unmatched.length ? el('p', { class: 'hint warn' }, `휴무계획에 없는 사번 ${sum.total - sum.matched}명 (집계 제외): ${sum.unmatched.slice(0, 15).join(', ')}${sum.unmatched.length > 15 || sum.total - sum.matched > 15 ? ' …' : ''}`) : null,
+      filePicker('엑셀 파일 선택 (.xlsx)', async (f) => {
+        const rows = await readFile(f); if (!rows) return;
+        S.union = parseUnion(rows); S.union.fileName = f.name; drawPrev();
+      }), prev,
+      el('p', { class: 'hint' }, '열람 권한은 가입 승인 화면에서 사람별로 지정합니다 (master는 항상 열람 가능).')));
   }
 
   /* ---- 휴무계획 ---- */
