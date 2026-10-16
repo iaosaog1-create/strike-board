@@ -404,20 +404,24 @@
         el('div', { class: 'gauge ' + gT0, style: `--a:${Math.min(100, gP0 || 0) * 1.8}deg` }, el('div', { class: 'arc' }), el('div', { class: 'gin' }),
           el('div', { class: 'gtx' }, el('b', {}, gP0 == null ? '-' : gP0 + '%'),
             el('small', {}, `투입 ${gTot0} / 정원 ${gQ0 || '-'}명`))),
+        el('div', { class: 'gsup' }, supCells.map(([n, v]) => el('div', {}, el('b', {}, `${v}명`), el('small', {}, n)))),
         el('div', { class: 'tblwrap' }, el('table', { class: 'tbl gtbl' },
           el('thead', {}, el('tr', {}, ...['구분', '현장', '지원', '협정', '근무', '정원', '비율'].map((h) => el('th', {}, h)))),
           el('tbody', {}, trs))),
-        el('div', { class: 'gsup' }, supCells.map(([n, v]) => el('div', {}, el('b', {}, `${v}명`), el('small', {}, n)))),
         null);
       const gTot = divs.reduce((t, d) => t + sumD(d.id, (x) => x.division_id === d.id && inB(x)).total, 0);
       const gQ = divs.reduce((t, d) => t + quotaSum(quota, d.id, basis), 0); const gP = pct(gTot, gQ);
       const digits = String(gTot).padStart(3, '0').split('');
       const shareBar = el('div', { class: 'share' }, divs.map((d) => { const n = sumBy(rows, (x) => x.division_id === d.id && inB(x)).total; return el('i', { class: divTone(d.id), style: `flex:${Math.max(n, 0.0001)}` }); }));
+      const basisBtn = el('button', { type: 'button', class: 'basischip', 'aria-expanded': String(!!o.basisOpen), onclick: () => { o.basisOpen = !o.basisOpen; draw(zones, rows, quota); } }, `기준 ${basisLabel} ${o.basisOpen ? '▲' : '▼'}`);
       const flip = el('div', { class: 'flipboard' },
-        el('div', { class: 'lb' }, el('span', {}, '현재 투입 인원 합계 (근무+지원+협정)'), el('span', {}, gQ ? `정원 ${gQ}명 · 투입 비율 ${gP}%` : '정원 미설정')),
-        el('div', { class: 'flap' }, digits.map((c) => el('div', { class: 'd' }, c)), el('span', { class: 'unit' }, '명')),
+        el('div', { class: 'lb' }, el('span', {}, `${dateLabel(o.date)} 투입 인원`), basisBtn),
+        el('div', { class: 'fmid' },
+          el('div', { class: 'flap' }, digits.map((c) => el('div', { class: 'd' }, c)), el('span', { class: 'unit' }, '명')),
+          el('div', { class: 'fq' }, el('b', {}, gQ ? `정원 ${gQ}명` : '정원 미설정'), el('small', {}, gQ ? `투입 비율 ${gP}%` : ''), el('em', {}, '근무+지원+협정'))),
         shareBar,
-        el('div', { class: 'shl' }, divs.map((d) => el('span', {}, `${shortDiv(d.name)} ${sumBy(rows, (x) => x.division_id === d.id && inB(x)).total}`))));
+        el('div', { class: 'shl' }, divs.map((d) => el('span', {}, `${shortDiv(d.name)} ${sumBy(rows, (x) => x.division_id === d.id && inB(x)).total}`))),
+        o.basisOpen ? el('div', { class: 'fchips' }, chips) : null);
       // 팀별 정원·근무 현황 (휴무계획 기준) + 근무조 합산
       const teamCard = el('div', { class: 'card teamcard' }, el('button', { type: 'button', class: 'basisbtn', 'aria-expanded': String(!!o.teamOpen), onclick: () => { o.teamOpen = !o.teamOpen; draw(zones, rows, quota); } }, el('span', {}, '팀별 정원 · 근무 현황'), el('b', {}, o.teamOpen ? '접기 ▲' : '펼치기 ▼')));
       const teamBox = el('div', { class: 'teambox' });
@@ -536,7 +540,7 @@
         const sumWrap = el('div', { class: 'sumwrap' }, panelOn ? ratioBar : null, panelOn ? customBox : null, panelOn ? staffBar : null, sumTbl);
         const oldTbl = tilesRow.querySelector('.tblwrap'); if (oldTbl) oldTbl.replaceWith(sumWrap);
         const oldSup = tilesRow.querySelector('.gsup');
-        if (oldSup) oldSup.replaceChildren(...[['근무', T.biz], ['지원', T.sup], ['협정', T.coop], ['투입', T.total]].map(([n, v]) => el('div', {}, el('b', {}, `${v || 0}명`), el('small', {}, n))));
+        if (oldSup) { oldSup.className = 'gsup kpi7'; oldSup.replaceChildren(...[['정원', T.dq, ''], ['근무', T.biz, ''], ['휴무외', T.leave, ''], ['결근', T.ab, 'warn'], ['지원', T.sup, 'gl'], ['협정', T.coop, ''], ['투입', T.total, 'tot']].map(([n, v, c]) => el('div', c ? { class: c } : {}, el('b', {}, v == null ? '-' : `${v}`), el('small', {}, n)))); }
       }
       flCard.append(el('p', { class: 'hint' }, '정원 = 사업부 전체 인원(휴무계획) · 근무 = 출근 인원 · 휴무외 = 연차·휴무·병가·보건휴가·휴직 등 · 결근 = 정원 − 근무 − 휴무외(파업 참여·출근 배치가 안 된 인원) · 계 = 근무+휴무외+결근 · 지원(경영본부·사업본부·행정 등)·협정은 사업부 인력이 아니라 정원에 포함되지 않음 · 투입 = 근무+지원+협정 · 비율 = 투입 ÷ 정원 · 층별 줄의 정원은 구역 필요 인원, 휴무외·결근·계는 합계 행에만 표시'));
       // 부족 구역 강조
@@ -580,7 +584,8 @@
       const bar = pickers(o, redraw, { shiftPick: false, allDiv: true });
       bar.append(el('button', { type: 'button', class: 'btn ghost sm', onclick: refresh }, '새로고침'),
         el('button', { type: 'button', class: 'btn sm', onclick: openBoard }, '상황판 (큰 화면)'));
-      body.replaceChildren(bar, flip, head, tilesRow, evCardEl(), unionCardEl(divs), flCard, lackCard, floorsCard, teamCard);
+      const unEl = unionCardEl(divs);
+      body.replaceChildren(bar, flip, tilesRow, el('div', { class: 'homepair' + (unEl ? ' two' : '') }, evCardEl(), unEl), flCard, lackCard, floorsCard, teamCard);
     };
     /* 상황판: 큰 글씨 전체화면, 30초마다 자동 갱신 */
     function openBoard() {
