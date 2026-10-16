@@ -363,13 +363,30 @@
       if (unionRows == null) return null;
       const line = (name, ids, cls) => { const a = uAgg(ids); const u = uSum(a);
         const pc = (k) => el('td', {}, el('b', {}, String(a[k].present)), el('small', {}, ` / ${a[k].total}`));
-        return el('tr', { class: cls || '' }, el('th', { scope: 'row' }, name), pc('민노'), pc('한마음'), pc('비노조'),
+        const key = ids.join(',');
+        return el('tr', { class: (cls || '') + ' clk' + (o.unionSel === key ? ' sel' : ''), tabindex: '0', role: 'button', 'aria-expanded': String(o.unionSel === key), 'aria-label': `${name} 세부 보기`,
+          onclick: () => { o.unionSel = o.unionSel === key ? null : key; if (cache) draw(cache.zones, cache.rows, cache.quota); } },
+          el('th', { scope: 'row' }, name), pc('민노'), pc('한마음'), pc('비노조'),
           el('td', { class: 'ust' }, el('b', {}, String(u.absent)), u.pending ? el('small', {}, ` (확인중 ${u.pending})`) : null), el('td', { class: 'urt' }, u.rate == null ? '-' : u.rate + '%')); };
       const all = uAgg(divs.map((d) => d.id)); const us = uSum(all);
       const tbl = el('table', { class: 'untbl' }, el('thead', {}, el('tr', {}, ...['구분', '민노', '한마음', '비노조', '파업 참여', '참여율'].map((h) => el('th', { scope: 'col' }, h)))),
         el('tbody', {}, ...divs.map((d) => line(shortDiv(d.name), [d.id])), divs.length > 1 ? line('전체', divs.map((d) => d.id), 'tot') : null));
-      return el('div', { class: 'card unc' }, el('div', { class: 'evh' }, el('h2', {}, '비정상상황 인력 구분'), el('small', { class: 'hint' }, '출근 인원 / 조합원 · 비노조는 명단 외 인원')),
-        el('div', { class: 'tblwrap' }, tbl),
+      const detailEl = () => {
+        if (!o.unionSel) return null;
+        const ids = o.unionSel.split(',').map(Number); const a = uAgg(ids);
+        const nm = ids.length > 1 ? '전체' : shortDiv((divs.find((d) => d.id === ids[0]) || {}).name || '');
+        const CLS = { '민노': 'uk-m', '한마음': 'uk-h', '비노조': 'uk-n' };
+        const tr = (k) => { const v = a[k]; const off = Math.max(0, v.total - v.working);
+          return el('tr', {}, el('th', { scope: 'row' }, el('i', { class: 'ukd ' + CLS[k] }), k), el('td', {}, String(v.total)), el('td', {}, String(off)), el('td', {}, String(v.working)),
+            el('td', { class: 'b' }, String(v.present)), el('td', { class: 'ust' }, String(v.absent)), el('td', {}, String(v.pending))); };
+        return el('div', { class: 'undet' }, el('h3', {}, `${nm} 세부 (인원 → 휴무 등 → 근무 예정 → 출근)`),
+          el('div', { class: 'tblwrap' }, el('table', { class: 'untbl' },
+            el('thead', {}, el('tr', {}, ...['구분', '인원', '휴무 등', '근무 예정', '출근', '파업 참여', '확인 중'].map((h) => el('th', { scope: 'col' }, h)))),
+            el('tbody', {}, ...UK.map(tr)))),
+          el('p', { class: 'hint' }, '휴무 등 = 주휴·연차·병가·휴직 등으로 오늘 근무하지 않는 인원 · 근무 예정 = 인원 − 휴무 등 · 파업 참여 = 근무 예정인데 미출근(팀 체크 마감) · 확인 중 = 근무 예정인데 아직 체크 전'));
+      };
+      return el('div', { class: 'card unc' }, el('div', { class: 'evh' }, el('h2', {}, '비정상상황 인력 구분'), el('small', { class: 'hint' }, '줄을 누르면 세부 내용 · 출근 인원 / 조합원')),
+        el('div', { class: 'tblwrap' }, tbl), detailEl(),
         el('p', { class: 'hint' }, `파업 참여 = 근무 예정 조합원 중 미출근(팀 출근 체크 마감 기준) · 민노 ${all['민노'].absent}명 · 한마음 ${all['한마음'].absent}명 · 참여율은 근무 예정 조합원 ${us.working}명 대비`));
     };
     const draw = (zones, rows, quota) => {

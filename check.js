@@ -19,6 +19,26 @@
     }
     return out;
   };
+  /* 조합 색 표시: 열람 권한자만 (권한 없으면 null → 표시 안 함). 5분 캐시 */
+  let UK = null, UK_AT = 0;
+  const loadUk = async () => {
+    if (UK_AT && Date.now() - UK_AT < 300000) return UK;
+    try {
+      const m = new Map();
+      for (let from = 0; from < 20000; from += 1000) {
+        const r = await sb.rpc('union_kinds').range(from, from + 999);
+        if (r.error) { UK = null; UK_AT = Date.now(); return null; }
+        for (const x of r.data || []) m.set(String(x.emp_no), x.kind);
+        if ((r.data || []).length < 1000) break;
+      }
+      UK = m;
+    } catch (e) { UK = null; }
+    UK_AT = Date.now(); return UK;
+  };
+  const ukCls = (emp) => (UK ? (UK.get(String(emp)) === '민노' ? 'uk-m' : UK.get(String(emp)) === '한마음' ? 'uk-h' : 'uk-n') : '');
+  const ukb = (emp) => (UK ? ' ukb-' + (UK.get(String(emp)) === '민노' ? 'm' : UK.get(String(emp)) === '한마음' ? 'h' : 'n') : '');
+  const ukDot = (emp) => (UK ? el('i', { class: 'ukd ' + ukCls(emp), 'aria-hidden': 'true' }) : null);
+  const ukLegend = () => (UK ? el('p', { class: 'uklg' }, el('i', { class: 'ukd uk-m' }), '민노 ', el('i', { class: 'ukd uk-h' }), '한마음 ', el('i', { class: 'ukd uk-n' }), '비노조') : null);
   const q = async (p) => { const r = await p; if (r.error) throw r.error; return r.data || []; };
   const tnum = (t) => String(t || '').replace(/\D/g, '') || String(t || '').trim();
   const sortTeam = (a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true });
@@ -61,6 +81,7 @@
         sb.rpc('list_team_support', { p_date: S.date }).then((r) => (r.error ? [] : r.data || []), () => [])]);
     } catch (e) { body.replaceChildren(el('p', { class: 'empty' }, '불러오지 못했습니다. 08·09 SQL 실행 여부를 확인하세요')); return; }
 
+    await loadUk();
     if (me.role === 'leader' && !me.plan_team) {
       body.replaceChildren(el('div', { class: 'card' }, el('h2', {}, '소속 팀이 지정되지 않았습니다'), el('p', { class: 'hint' }, '관리자에게 소속 팀(1팀~10팀) 지정을 요청하세요.')));
       return;
@@ -156,7 +177,7 @@
         };
         const people = teamRows.map((r) => {
           const leave = isLeave(r); const a = S.smap.get(r.emp_no);
-          return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + (leave ? ' leave' : a ? ' on sup' : ''), disabled: leave, 'aria-pressed': String(!!a), onclick: tap(r) },
+          return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + ukb(r.emp_no) + (leave ? ' leave' : a ? ' on sup' : ''), disabled: leave, 'aria-pressed': String(!!a), onclick: tap(r) },
             el('b', {}, r.name), el('small', {}, leave ? reason(r) : a ? `→ ${a.to_team} ${zoneBrief(a.zone_id)}` : r.checked ? '출근' : ''));
         });
         const save = el('button', { class: 'btn', type: 'button' }, `지원 저장 (${S.smap.size}명)`);
@@ -278,13 +299,13 @@
         const sp = supOut.get(r.emp_no);
         const chg = r.changed === 'work' ? '변경 · 출근' : r.changed === 'off' ? '변경 · 휴무' : '';
         const sub = leave ? (chg || reason(r)) : on ? `✔ ${S.mark.get(r.emp_no) ? (sp ? `${sp.to_team} 지원` : zoneShort(S.mark.get(r.emp_no))) : '출근'}` : sp ? `→ ${sp.to_team} 지원` : (chg || (r.leave_kind === 'half' ? '반차' : ''));
-        return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + (leave ? ' leave' : on ? ' on' : '') + (sp && !leave ? ' sup' : '') + (r.changed ? ' chg' : '') + (r.leave_kind === 'half' ? ' half' : ''), disabled: leave && !ov, 'aria-pressed': String(on), onclick: ov ? ovTap(r) : tap(r) },
+        return el('button', { type: 'button', class: 'pp ' + gcls(r.gender) + ukb(r.emp_no) + (leave ? ' leave' : on ? ' on' : '') + (sp && !leave ? ' sup' : '') + (r.changed ? ' chg' : '') + (r.leave_kind === 'half' ? ' half' : ''), disabled: leave && !ov, 'aria-pressed': String(on), onclick: ov ? ovTap(r) : tap(r) },
           el('b', {}, r.name), el('small', {}, sub));
       };
       const leads = teamRows.filter((r) => r.is_lead); const mems = teamRows.filter((r) => !r.is_lead);
       const people = leads.length ? [
-        el('div', { class: 'f' }, el('span', { class: 'hint' }, `팀 현장관리 ${leads.length}명 (팀장·조장)`), el('div', { class: 'ppgrid' }, leads.map(card))),
-        el('div', { class: 'f' }, el('span', { class: 'hint' }, `팀원 ${mems.length}명`), el('div', { class: 'ppgrid' }, mems.map(card)))] : el('div', { class: 'ppgrid' }, teamRows.map(card));
+        ukLegend(), el('div', { class: 'f' }, el('span', { class: 'hint' }, `팀 현장관리 ${leads.length}명 (팀장·조장)`), el('div', { class: 'ppgrid' }, leads.map(card))),
+        el('div', { class: 'f' }, el('span', { class: 'hint' }, `팀원 ${mems.length}명`), el('div', { class: 'ppgrid' }, mems.map(card)))] : [ukLegend(), el('div', { class: 'ppgrid' }, teamRows.map(card))];
       const lineOf = (list) => { const t = tally(list, S.mark); return `${t.present}/${t.total - t.leave}`; };
       const ovBtn = el('button', { type: 'button', class: 'btn sm ' + (S.ovMode ? '' : 'ghost'), 'aria-pressed': String(!!S.ovMode), onclick: () => { S.ovMode = !S.ovMode; draw(); } }, S.ovMode ? '휴무 변경 모드 끄기' : '휴무 변경 모드');
       const noZone = [...S.mark.values()].filter((v) => !v).length;
